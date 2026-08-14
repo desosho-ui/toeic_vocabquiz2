@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
 <meta name="theme-color" content="#6C4DF6">
 <meta name="color-scheme" content="light dark">
@@ -525,7 +526,7 @@ body.student .logo{flex:1}
     <button data-v="listen"><span class="ic">🎧</span><span>聞き流し</span></button>
     <button data-v="stats"><span class="ic">🏆</span><span>きろく</span></button>
     <button data-v="settings"><span class="ic">⚙️</span><span>設定</span></button>
-    <button data-v="teach"><span class="ic">🎓</span><span>先生用</span></button>
+    
   </nav>
   <button class="icon-btn" id="themeBtn" title="ダークモード">🌙</button>
 </header>
@@ -842,157 +843,6 @@ body.student .logo{flex:1}
   <div class="card" id="examDone" style="display:none"></div>
 </section>
 
-<!-- ==================== TEACH（先生用） ==================== -->
-<section class="view" id="v-teach">
-  <div class="card" id="teachLock">
-    <h2 id="teachLockTitle">🔑 合い言葉を設定</h2>
-    <p class="muted" id="teachLockNote" style="margin:6px 0 14px"></p>
-    <div class="row">
-      <input type="password" id="teachPass" placeholder="合い言葉" style="flex:1;min-width:160px" autocomplete="current-password">
-      <button class="btn" id="teachLockBtn">設定して開く</button>
-    </div>
-    <p class="muted" style="margin-top:12px">忘れた場合は <a href="#" id="teachForget">リセット</a> できます（作成済みテストと成績は残ります）。</p>
-  </div>
-
-  <div id="teachMain" style="display:none">
-    <div class="card">
-      <h2>🎓 テストを作る</h2>
-      <div class="exam-field" style="margin-top:14px"><label>テスト名</label><input type="text" id="tTitle"></div>
-      <div class="exam-field"><label>クラス（1行に1つ）</label>
-        <textarea id="tClasses" style="width:100%;height:74px;border:2px solid var(--edge);border-radius:12px;padding:10px;font-size:15px"></textarea></div>
-      <p class="sec-label">出題範囲</p>
-      <div class="row" id="tCats" style="gap:6px;margin-bottom:10px"></div>
-      <div class="row" style="gap:9px;margin-bottom:12px">
-        <input type="number" id="tStart" min="1" class="rgnum" inputmode="numeric">
-        <span class="muted" style="font-weight:900">〜</span>
-        <input type="number" id="tEnd" min="1" class="rgnum" inputmode="numeric">
-        <span class="muted">番</span>
-      </div>
-      <p class="sec-label">出題形式（複数選ぶと順番に混ぜます）</p>
-      <div class="row" id="tModes" style="gap:6px;margin-bottom:12px"></div>
-      <div class="row" style="margin-bottom:12px">
-        <label class="ck">問題数 <input type="number" id="tCount" min="1" max="200" style="width:80px"></label>
-        <label class="ck">制限時間
-          <select id="tLimit"><option value="0">なし</option><option value="10">10秒</option>
-            <option value="15">15秒</option><option value="20">20秒</option><option value="30">30秒</option>
-            <option value="60">60秒</option></select>／問</label>
-      </div>
-      <div class="grid2" style="margin-bottom:12px">
-        <label class="ck"><input type="checkbox" id="tOpt_mean"> 日本語の意味を出す</label>
-        <label class="ck"><input type="checkbox" id="tOpt_ja"> 例文の和訳を出す</label>
-        <label class="ck"><input type="checkbox" id="tOpt_hint"> 文字数ヒントを出す</label>
-        <label class="ck"><input type="checkbox" id="tOpt_initial"> 空欄に頭文字を入れる</label>
-      </div>
-      <p class="muted" id="tInfo" style="margin:0 0 12px"></p>
-      <div class="row">
-        <button class="btn sm" id="tSave">💾 保存</button>
-        <button class="btn g sm" id="tNew">＋ 新しいテスト</button>
-        <button class="btn g sm" id="tReseed">🎲 出題内容を入れ替え</button>
-        <button class="btn g sm" id="tPreview">👀 学生ビューを見る</button>
-      </div>
-      <p class="muted" style="margin:10px 0 0">同じテストURLなら、全員に同じ問題が同じ順で出ます。</p>
-    </div>
-
-    <div class="card">
-      <h3>📱 配布する（QRコード）</h3>
-      <div id="tHostWarn" style="display:none"></div>
-      <div id="tDirty"></div>
-      <button class="btn go" id="tPublish" style="margin-bottom:14px">🔄 いま編集中のテストをQRに反映</button>
-      <div id="tGasState" class="sendbox"></div>
-      <p class="sec-label">📋 このQRを読むと実施されるテスト</p>
-      <div id="tQrInfo" class="qrinfo"></div>
-      <div id="tQr" style="text-align:center;margin-bottom:10px"></div>
-      <p class="muted" id="tQrLen" style="text-align:center;margin:0 0 12px"></p>
-      <textarea id="tUrl" readonly style="width:100%;height:70px;font-size:11px;font-family:monospace;
-        border:2px solid var(--edge);border-radius:12px;padding:9px"></textarea>
-      <div class="row" style="margin-top:10px">
-        <button class="btn sm" id="tCopy">📋 URLをコピー</button>
-        <button class="btn g sm" id="tQrDl">📥 QRを画像で保存</button>
-        <button class="btn g sm" id="tPrint">🖨 印刷</button>
-      </div>
-      <p class="muted" style="margin-top:10px">学生がこのQRを読むと、受験画面だけが開きます（先生用タブは表示されません）。</p>
-    </div>
-
-    <div class="card">
-      <h3>☁️ 自動集計（スプレッドシート連携）</h3>
-      <p class="muted" style="margin:0 0 10px">設定すると、学生が解答し終えた瞬間に結果が届き、この画面に自動で反映されます。</p>
-      <div class="exam-field"><label>Apps Script のURL</label>
-        <input type="text" id="tGas" placeholder="https://script.google.com/macros/s/..../exec"></div>
-      <div class="row" style="margin-bottom:10px">
-        <button class="btn sm" id="gPull">🔄 いま取り込む</button>
-        <label class="ck"><input type="checkbox" id="gAuto" checked> 自動更新（15秒ごと）</label>
-      </div>
-      <p class="muted" id="gasStatus" style="margin:0 0 10px"></p>
-      <p class="muted" style="margin:0"><a href="#" id="gGasHelp">▸ 設定のしかた（コピー用コード）</a></p>
-      <div class="gascode" id="gasCode">■ 手順
-1. Google スプレッドシートを新規作成
-2. 拡張機能 → Apps Script を開き、下のコードを全部貼り付けて保存
-3. デプロイ → 新しいデプロイ → 種類「ウェブアプリ」
-   実行するユーザー：自分／アクセスできるユーザー：<b>全員</b>
-4. 発行された .../exec のURLを上の欄に貼り付ける
-5. テストを作り直してQRを配布（URLにこの設定が入ります）
-
-■ コード
-var HEAD = ['クラス','学籍番号','氏名','テスト名','問題数','正解数','おしい','正答率(%)','所要(秒)','受験日時','testId'];
-
-function doPost(e) {
-  var sh = SpreadsheetApp.getActiveSheet();
-  var d  = JSON.parse(e.postData.contents);
-  if (sh.getLastRow() === 0) sh.appendRow(HEAD);
-  sh.appendRow([d.c, d.s, d.n, d.ti, d.q, d.o, d.e, d.r, d.sec, new Date(d.at), d.t]);
-  return ContentService.createTextOutput(JSON.stringify({ok:true}))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doGet(e) {
-  var sh = SpreadsheetApp.getActiveSheet();
-  var v  = sh.getDataRange().getValues();
-  var out = [];
-  for (var i = 1; i < v.length; i++) {
-    var r = v[i];
-    if (!r[2]) continue;
-    out.push({c:r[0], s:String(r[1]), n:r[2], ti:r[3], q:r[4], o:r[5], e:r[6],
-              r:r[7], sec:r[8], at:new Date(r[9]).getTime(), t:r[10], v:1});
-  }
-  return ContentService.createTextOutput(JSON.stringify(out))
-    .setMimeType(ContentService.MimeType.JSON);
-}</div>
-    </div>
-
-    <div class="card">
-      <h3>📥 手動で取り込む</h3>
-      <p class="muted" style="margin:0 0 10px">連携を使わない場合は、学生の「結果コード」を貼り付けるか、結果ファイルを入れてください。複数まとめてOKです。</p>
-      <textarea id="gPaste" placeholder="結果コードを貼り付け（改行区切りで複数可）" style="width:100%;height:88px;
-        font-size:11px;font-family:monospace;border:2px solid var(--edge);border-radius:12px;padding:9px"></textarea>
-      <div class="row" style="margin:10px 0">
-        <button class="btn sm" id="gImport">取り込む</button>
-        <button class="btn g sm" id="gFileBtn">📂 ファイルを選ぶ</button>
-        <input type="file" id="gFile" accept=".json,.txt" multiple style="display:none">
-      </div>
-      <div class="dropzone" id="gDrop">ここに結果ファイル（.json）をドラッグ＆ドロップ</div>
-    </div>
-
-    <div class="card">
-      <h3>📊 成績表</h3>
-      <div class="row" style="margin-bottom:10px">
-        <select id="gTest" style="flex:1;min-width:0"></select>
-        <span class="muted" id="gCount"></span>
-      </div>
-      <div id="gStat" style="margin-bottom:12px"></div>
-      <div class="tblwrap" style="max-height:none">
-        <table style="min-width:640px"><thead><tr>
-          <th>クラス</th><th class="num">学籍番号</th><th>氏名</th><th class="num">正解</th>
-          <th class="num">正答率</th><th class="num">所要</th><th class="num">受験日時</th><th></th>
-        </tr></thead><tbody id="gBody"></tbody></table>
-      </div>
-      <div class="row" style="margin-top:12px">
-        <button class="btn sm" id="gXlsx">📊 Excel（.xlsx）で出力</button>
-        <button class="btn g sm" id="gCsv">CSVで出力</button>
-        <button class="btn g sm" id="gClear" style="color:var(--p2)">🗑 解答を消去</button>
-      </div>
-    </div>
-  </div>
-</section>
 
 <!-- ==================== STATS ==================== -->
 <section class="view" id="v-stats">
@@ -3742,7 +3592,7 @@ function go(v){ $$('.view').forEach(s=>s.classList.toggle('on', s.id==='v-'+v));
   $$('#tabs button').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
   if(v==='list') renderList(); if(v==='stats') renderStats(); if(v==='home') renderHome();
   if(v==='listen') renderListen();
-  if(v==='teach' && typeof renderTeach==='function') renderTeach();
+  
   if(v!=='listen' && AB.on) abStop();
   window.scrollTo({top:0,behavior:'instant'}); }
 $('#tabs').addEventListener('click',e=>{ const b=e.target.closest('button'); if(b) go(b.dataset.v); });
@@ -5450,8 +5300,7 @@ window.addEventListener('beforeunload',()=>{ try{localStorage.setItem(KEY,JSON.s
 /* ============================================================
    先生モード：語彙テストの作成・配布（QR）・成績集計
    ============================================================ */
-S.tea = S.tea || {pass:'', gas:'', tests:[], results:[], auto:true, lastPull:0, pub:null};
-const TEA = S.tea;
+
 let ADMIN = false, PREVIEW = false, EXAM = null;      // EXAM: 受験中のテスト設定
 
 /* ---------- 文字列 <-> URL 用エンコード ---------- */
@@ -5496,74 +5345,10 @@ function qrCanvas(text, px){
   return cv;
 }
 
-/* ---------- 最小 XLSX 書き出し（ZIP: 無圧縮） ---------- */
-const CRCT=(()=>{ const t=new Uint32Array(256);
-  for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
-function crc32(buf){ let c=0xFFFFFFFF; for(let i=0;i<buf.length;i++) c=CRCT[(c^buf[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
-function zipBlob(files){
-  const enc=new TextEncoder(); const parts=[]; const central=[]; let off=0;
-  const u16=v=>[v&255,(v>>8)&255], u32=v=>[v&255,(v>>8)&255,(v>>16)&255,(v>>24)&255];
-  files.forEach(f=>{
-    const name=enc.encode(f.name), data=enc.encode(f.data), crc=crc32(data);
-    const lh=[].concat([0x50,0x4b,0x03,0x04],u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),
-      u32(data.length),u32(data.length),u16(name.length),u16(0));
-    parts.push(new Uint8Array(lh),name,data);
-    central.push({name,crc,len:data.length,off});
-    off += lh.length+name.length+data.length;
-  });
-  let cs=0; const cparts=[];
-  central.forEach(c=>{
-    const ch=[].concat([0x50,0x4b,0x01,0x02],u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),
-      u32(c.crc),u32(c.len),u32(c.len),u16(c.name.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(c.off));
-    cparts.push(new Uint8Array(ch),c.name); cs += ch.length+c.name.length;
-  });
-  const end=[].concat([0x50,0x4b,0x05,0x06],u16(0),u16(0),u16(files.length),u16(files.length),u32(cs),u32(off),u16(0));
-  return new Blob(parts.concat(cparts,[new Uint8Array(end)]),{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-}
-const xesc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-function sheetXml(rows){
-  const body=rows.map((r,ri)=>'<row r="'+(ri+1)+'">'+r.map((v,ci)=>{
-    const ref=String.fromCharCode(65+(ci%26))+(ci>=26?'':'')+(ri+1);
-    const col=(ci<26? String.fromCharCode(65+ci) : String.fromCharCode(64+Math.floor(ci/26))+String.fromCharCode(65+ci%26));
-    const cell=col+(ri+1);
-    if(typeof v==='number' && isFinite(v)) return '<c r="'+cell+'"><v>'+v+'</v></c>';
-    return '<c r="'+cell+'" t="inlineStr"><is><t xml:space="preserve">'+xesc(v)+'</t></is></c>';
-  }).join('')+'</row>').join('');
-  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    +'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+body+'</sheetData></worksheet>';
-}
-function xlsxBlob(sheets){          // sheets: [{name, rows}]
-  const files=[];
-  files.push({name:'[Content_Types].xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    +'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-    +'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-    +'<Default Extension="xml" ContentType="application/xml"/>'
-    +'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-    + sheets.map((s,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')
-    +'</Types>'});
-  files.push({name:'_rels/.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-    +'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'});
-  files.push({name:'xl/workbook.xml', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    +'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
-    + sheets.map((s,i)=>'<sheet name="'+xesc(s.name).slice(0,31)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join('')
-    +'</sheets></workbook>'});
-  files.push({name:'xl/_rels/workbook.xml.rels', data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-    + sheets.map((s,i)=>'<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join('')
-    +'</Relationships>'});
-  sheets.forEach((s,i)=>files.push({name:'xl/worksheets/sheet'+(i+1)+'.xml', data:sheetXml(s.rows)}));
-  return zipBlob(files);
-}
+
 
 /* ---------- テスト設定 ---------- */
-function newTestCfg(){
-  return {id:'t'+Date.now().toString(36), title:'語彙テスト',
-    classes:['1年A組','1年B組'], cats:['word'], start:1, end:100, count:20,
-    modes:['type'], limit:0, seed:(Math.random()*1e6)|0,
-    gas:(TEA.gas||''),                       // 設定済みの送信先を引き継ぐ
-    opts:{initial:false, mean:true, ja:true, hint:true}, at:Date.now()};
-}
+
 function cfgPool(cfg){
   let out=[];
   CATORDER.forEach(c=>{ if(cfg.cats.includes(c))
@@ -5579,10 +5364,7 @@ function buildExamItems(cfg){
   setSeed(null);
   return items;
 }
-function testUrl(cfg){
-  const base=location.href.split('#')[0];
-  return base+'#t='+packCfg(cfg);
-}
+
 
 /* ---------- 学生：受験 ---------- */
 function showExamEntry(cfg){
@@ -5626,7 +5408,7 @@ function examFinish(){
     q:total, o:ok, e:near, r:rate, sec, at:Date.now(),
     d:Q.log.map((x,i)=>[Q.items[i]?Q.items[i].e.id:0, x.res==='ok'?1:(x.res==='near'?2:0)])};
   const code=b64u(JSON.stringify(rec2));
-  if(ADMIN||PREVIEW) saveResult(rec2);          // 先生自身のプレビューはそのまま取り込む
+  
   $$('.view').forEach(s=>s.classList.remove('on'));
   $('#v-exam').classList.add('on');
   $('#examEntry').style.display='none';
@@ -5641,33 +5423,32 @@ function examFinish(){
      </div>
      <div class="condtarget"><b>${esc(who.cls)}</b>　${esc(who.name)}（${esc(who.sid)}）</div>
      <hr class="sep">
-     ${hasGas ? `
-       <button class="btn go" id="exSend">📤 先生にスコアを送信</button>
-       <div id="sendState" style="margin-top:12px"></div>
-       <details class="more" id="exFallback" style="margin-top:14px">
-         <summary>うまく送れないときは（コード・QR・ファイル）</summary>
-         <div id="exManual"></div>
-       </details>`
-      : `<div class="sendbox ng">この先生は自動送信を設定していません。下のコードかQR、ファイルを提出してください。</div>
-         <div id="exManual"></div>`}
+     ${hasGas ? `<button class="btn go" id="exSend">📤 先生にスコアを送信</button>
+                 <div id="sendState" style="margin-top:12px"></div>
+                 <div id="exBackup"></div>`
+              : `<div class="sendbox ng">この先生は自動送信を設定していません。下のコードかQR、ファイルを提出してください。</div>
+                 <div id="exManual"></div>`}
      ${(ADMIN||PREVIEW)?'<div class="row" style="margin-top:14px"><button class="btn g sm" id="exBackAdmin">👩‍🏫 管理者ビューに戻る</button></div>':''}`;
 
-  // --- 提出用のコード・QR・ファイル ---
-  $('#exManual').innerHTML=
-    `<div id="exQr" style="text-align:center;margin:12px 0"></div>
-     <textarea id="exCode" readonly style="width:100%;height:82px;font-size:11px;font-family:monospace;
-       border:2px solid var(--edge);border-radius:12px;padding:9px"></textarea>
-     <div class="row" style="margin-top:10px">
-       <button class="btn g sm" id="exCopy">📋 コードをコピー</button>
-       <button class="btn g sm" id="exDl">📥 結果ファイルを保存</button>
-     </div>
-     <p class="muted" style="margin-top:10px">QRを先生に見せるか、コード／ファイルを提出してください。</p>`;
-  $('#exCode').value=code;
-  $('#exQr').appendChild(qrCanvas(code, 240));
-  $('#exCopy').onclick=()=>{ $('#exCode').select();
-    try{ navigator.clipboard.writeText(code); }catch(e){ document.execCommand('copy'); } toast('コードをコピーしました'); };
-  $('#exDl').onclick=()=>dl(new Blob([JSON.stringify(rec2)],{type:'application/json'}),
-    `result_${who.cls}_${who.sid}_${who.name}.json`.replace(/[\\/:*?"<>|]/g,'_'));
+  // --- 提出用のコード・QR・ファイル（必要になったときだけ作る）---
+  function buildManual(host){
+    host.innerHTML=
+      `<div id="exQr" style="text-align:center;margin:12px 0"></div>
+       <textarea id="exCode" readonly style="width:100%;height:82px;font-size:11px;font-family:monospace;
+         border:2px solid var(--edge);border-radius:12px;padding:9px"></textarea>
+       <div class="row" style="margin-top:10px">
+         <button class="btn g sm" id="exCopy">📋 コードをコピー</button>
+         <button class="btn g sm" id="exDl">📥 結果ファイルを保存</button>
+       </div>
+       <p class="muted" style="margin-top:10px">QRを先生に見せるか、コード／ファイルを提出してください。</p>`;
+    $('#exCode').value=code;
+    $('#exQr').appendChild(qrCanvas(code, 240));
+    $('#exCopy').onclick=()=>{ $('#exCode').select();
+      try{ navigator.clipboard.writeText(code); }catch(e){ document.execCommand('copy'); } toast('コードをコピーしました'); };
+    $('#exDl').onclick=()=>dl(new Blob([JSON.stringify(rec2)],{type:'application/json'}),
+      `result_${who.cls}_${who.sid}_${who.name}.json`.replace(/[\\/:*?"<>|]/g,'_'));
+  }
+  if(!hasGas) buildManual($('#exManual'));
 
   // --- 先生へ送信 ---
   if(hasGas){
@@ -5684,330 +5465,37 @@ function examFinish(){
           btn.disabled=true; btn.textContent='✅ 送信しました';
           btn.style.background='var(--p3)';
           box.innerHTML='<div class="sendbox ok">✅ 先生にスコアを送信しました。これで終了です。おつかれさまでした！</div>';
-          const f=$('#exFallback'); if(f) f.open=false;
+          $('#exBackup').innerHTML='';
           buzz([20,50,20]); confetti(60);
         })
         .catch(()=>{
           btn.disabled=false; btn.textContent='🔁 もう一度送信する';
-          box.innerHTML=`<div class="sendbox ng">⚠️ 送信できませんでした（${tries}回目）。電波の良い場所でもう一度お試しください。<br>
-            それでもだめなら、下の「うまく送れないときは」を開いてコードを提出してください。</div>`;
-          const f=$('#exFallback'); if(f) f.open=true;
+          box.innerHTML=`<div class="sendbox ng">⚠️ 送信できませんでした（${tries}回目）。電波の良い場所でもう一度お試しください。</div>`;
+          if(tries>=2 && !$('#exCode')){          // 2回失敗したら控えを出す
+            const bk=$('#exBackup');
+            bk.innerHTML='<hr class="sep"><p class="sec-label">送れないときは、これを先生に提出してください</p><div id="exManual"></div>';
+            buildManual($('#exManual'));
+          }
         });
     };
     btn.onclick=send;
     box.innerHTML='<div class="sendbox wait">上のボタンを押して、先生にスコアを送ってください。</div>';
   }
-  if($('#exBackAdmin')) $('#exBackAdmin').onclick=()=>{ PREVIEW=false; location.hash=''; go('teach'); renderTeach(); };
+  
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
-/* ---------- 先生：結果の保存と成績表 ---------- */
-function saveResult(r){
-  if(!r || !r.n) return false;
-  const i=TEA.results.findIndex(x=>x.t===r.t && x.s===r.s && x.n===r.n);
-  if(i>=0){ if((TEA.results[i].at||0) <= (r.at||0)) TEA.results[i]=r; }
-  else TEA.results.push(r);
-  save(); return true;
-}
-function importCodes(text){
-  let ok=0, ng=0;
-  String(text).split(/[\s,]+/).filter(Boolean).forEach(tok=>{
-    try{ const o=JSON.parse(unb64u(tok)); if(saveResult(o)) ok++; else ng++; }
-    catch(e){ try{ const o=JSON.parse(tok); if(saveResult(o)) ok++; else ng++; }catch(e2){ ng++; } }
-  });
-  return {ok,ng};
-}
-function gradeRows(testId){
-  const rs=TEA.results.filter(r=>!testId||r.t===testId)
-    .sort((a,b)=> (a.c||'').localeCompare(b.c||'') || (a.s||'').localeCompare(b.s||''));
-  return rs;
-}
-function buildSheets(testId){
-  const rs=gradeRows(testId);
-  const head=['クラス','学籍番号','氏名','テスト名','問題数','正解数','おしい','正答率(%)','所要(秒)','受験日時'];
-  const rowOf=r=>[r.c||'',r.s||'',r.n||'',r.ti||'',r.q||0,r.o||0,r.e||0,r.r||0,r.sec||0,
-    new Date(r.at||Date.now()).toLocaleString('ja-JP')];
-  const sheets=[{name:'全体', rows:[head].concat(rs.map(rowOf))}];
-  const classes=[...new Set(rs.map(r=>r.c||'（未設定）'))];
-  classes.forEach(c=>{
-    const sub=rs.filter(r=>(r.c||'（未設定）')===c);
-    const rows=[head].concat(sub.map(rowOf));
-    if(sub.length){
-      const avg=sub.reduce((a,b)=>a+(b.r||0),0)/sub.length;
-      const hi=Math.max(...sub.map(r=>r.r||0)), lo=Math.min(...sub.map(r=>r.r||0));
-      rows.push([],['受験者数',sub.length],['平均正答率(%)',Math.round(avg*10)/10],['最高(%)',hi],['最低(%)',lo]);
-    }
-    sheets.push({name:c, rows});
-  });
-  return sheets;
-}
 
-/* ---------- スプレッドシートから取り込む ---------- */
-let gasTimer=null, gasBusy=false;
-function gasStatus(msg,cls){
-  const el=$('#gasStatus'); if(!el) return;
-  el.innerHTML = msg ? `<span class="${cls||''}">${msg}</span>` : '';
-}
-async function gasPull(quiet){
-  const url=(TEA.gas||'').trim();
-  if(!url){ if(!quiet) gasStatus('URLが未設定です。下の手順で設定してください。','ng'); return 0; }
-  if(gasBusy) return 0;
-  gasBusy=true;
-  if(!quiet) gasStatus('取り込み中…');
-  try{
-    const res=await fetch(url+(url.includes('?')?'&':'?')+'action=list&_='+Date.now(),{method:'GET'});
-    const txt=await res.text();
-    let rows=null; try{ rows=JSON.parse(txt); }catch(e){}
-    if(!Array.isArray(rows)) throw new Error('bad');
-    let added=0;
-    rows.forEach(r=>{ if(r && r.n){ const before=TEA.results.length; saveResult(r);
-      if(TEA.results.length>before) added++; } });
-    TEA.lastPull=Date.now(); save(); renderGrades();
-    gasStatus(`✅ ${new Date().toLocaleTimeString('ja-JP')} 取り込み済み（全 ${rows.length} 件${added?` / 新着 ${added} 件`:''}）`,'ok');
-    if(added) toast(`新しい解答が ${added} 件届きました`);
-    return added;
-  }catch(e){
-    gasStatus('⚠️ 取り込めませんでした。URLと「アクセスできるユーザー：全員」の設定を確認してください。','ng');
-    return 0;
-  }finally{ gasBusy=false; }
-}
-function gasAutoSet(on){
-  clearInterval(gasTimer); gasTimer=null;
-  if(on && (TEA.gas||'').trim()){
-    gasTimer=setInterval(()=>{ if($('#v-teach').classList.contains('on')) gasPull(true); }, 15000);
-  }
-}
 
-/* ---------- 先生：画面 ---------- */
-let CUR=null;                                   // 編集中のテスト
-const deep = o => JSON.parse(JSON.stringify(o));
-const sameCfg = (a,b) => JSON.stringify(a)===JSON.stringify(b);
-/* QRに入っている内容を、URLから復元して表示する（表示と実物のズレを防ぐ） */
-function renderQrInfo(){
-  const pub=TEA.pub;
-  const box=$('#tQrInfo'); if(!box) return;
-  if(!pub){ box.innerHTML='<b>まだQRに反映されていません。</b>上のボタンを押してください。'; return; }
-  const url=testUrl(pub);
-  let cfg=null; try{ cfg=unpackCfg(url.split('#t=')[1]); }catch(e){}
-  if(!cfg){ box.innerHTML='<b>QRの内容を読み取れませんでした。</b>'; return; }
-  const cats=CATORDER.filter(c=>(cfg.cats||[]).includes(c)).map(c=>CATS[c].icon+CATS[c].name).join('・');
-  const pool=cfgPool(cfg).length;
-  const n=Math.min(cfg.count||0, pool);
-  const modes=(cfg.modes||[]).map(m=>MODE_SHORT[m]||m).join('・');
-  const o=cfg.opts||{};
-  const on=[]; if(o.mean!==false) on.push('意味'); if(o.ja!==false) on.push('和訳');
-  if(o.hint!==false) on.push('文字数ヒント'); if(o.initial) on.push('頭文字');
-  let pv='';
-  try{ pv=buildExamItems(cfg).slice(0,3).map(x=>x.e.head).join(' / '); }catch(e){}
-  box.innerHTML =
-    `<span class="ttl">${esc(cfg.title||'（無題）')}</span>` +
-    `<div><span class="k">クラス</span>${esc((cfg.classes||[]).join('・'))||'（未設定）'}</div>` +
-    `<div><span class="k">出題範囲</span>${esc(cats)} の #${cfg.start}–#${cfg.end}（対象 ${pool}語）</div>` +
-    `<div><span class="k">問題数</span><b>${n}問</b>${cfg.count>pool?`（${cfg.count}問の設定ですが対象が${pool}語）`:''}</div>` +
-    `<div><span class="k">出題形式</span><b>${esc(modes)}</b></div>` +
-    `<div><span class="k">制限時間</span>${cfg.limit?`1問 ${cfg.limit}秒`:'なし'}</div>` +
-    `<div><span class="k">表示</span>${on.join('・')||'なし'}</div>` +
-    `<div><span class="k">自動送信</span>${cfg.gas?'<b style="color:var(--p3)">ON</b>':'<b style="color:var(--p2)">OFF</b>'}</div>` +
-    (pv?`<div><span class="k">最初の3問</span><span class="pv">${esc(pv)}</span></div>`:'') +
-    `<div class="muted" style="margin-top:6px">反映日時：${new Date(pub.pubAt||pub.at||Date.now()).toLocaleString('ja-JP')}</div>`;
-}
-function renderTeach(){
-  if(!ADMIN){ $('#teachLock').style.display='block'; $('#teachMain').style.display='none';
-    $('#teachLockTitle').textContent = TEA.pass ? '🔒 合い言葉を入力' : '🔑 合い言葉を設定';
-    $('#teachLockBtn').textContent = TEA.pass ? '開く' : '設定して開く';
-    $('#teachLockNote').textContent = TEA.pass ? 'この端末で先生用の画面を開きます。'
-      : '最初に合い言葉を決めてください。この端末に記憶され、以後は入力だけで開けます。';
-    return; }
-  $('#teachLock').style.display='none'; $('#teachMain').style.display='block';
-  if(!CUR) CUR = TEA.tests.length ? JSON.parse(JSON.stringify(TEA.tests[TEA.tests.length-1])) : newTestCfg();
-  if(!CUR.gas && TEA.gas) CUR.gas = TEA.gas;   // 送信先が空なら設定済みのものを使う
-  // --- フォーム ---
-  $('#tTitle').value=CUR.title||'';
-  $('#tClasses').value=(CUR.classes||[]).join('\n');
-  $('#tStart').value=CUR.start; $('#tEnd').value=CUR.end; $('#tCount').value=CUR.count;
-  $('#tLimit').value=CUR.limit||0;
-  $('#tGas').value=CUR.gas||TEA.gas||'';
-  $('#gAuto').checked = TEA.auto!==false;
-  if(TEA.gas && !gasTimer && TEA.auto!==false){ gasAutoSet(true); gasPull(true); }
-  if(TEA.lastPull && !$('#gasStatus').textContent)
-    gasStatus(`最終取り込み：${new Date(TEA.lastPull).toLocaleString('ja-JP')}`);
-  const cg=$('#tCats'); cg.innerHTML='';
-  CATORDER.forEach(c=>{ const b=document.createElement('button');
-    b.className='chip sm'+(CUR.cats.includes(c)?' on':''); b.textContent=CATS[c].icon+CATS[c].name;
-    b.onclick=()=>{ const i=CUR.cats.indexOf(c); if(i<0) CUR.cats.push(c); else if(CUR.cats.length>1) CUR.cats.splice(i,1);
-      renderTeach(); }; cg.appendChild(b); });
-  const mg=$('#tModes'); mg.innerHTML='';
-  MIX_ALL.forEach(m=>{ const b=document.createElement('button');
-    b.className='chip sm'+(CUR.modes.includes(m)?' on':''); b.textContent=MODE_SHORT[m];
-    b.onclick=()=>{ const i=CUR.modes.indexOf(m); if(i<0) CUR.modes.push(m); else if(CUR.modes.length>1) CUR.modes.splice(i,1);
-      renderTeach(); }; mg.appendChild(b); });
-  ['initial','mean','ja','hint'].forEach(k=>{ const el=$('#tOpt_'+k); if(el) el.checked=!!(CUR.opts||{})[k]; });
-  const pool=cfgPool(CUR).length;
-  $('#tInfo').innerHTML=`対象 <b>${pool}</b>語 → 出題 <b>${Math.min(CUR.count||0,pool)}</b>問`
-    + (pool<(CUR.count||0)?'（対象が少ないため全問出題）':'');
-  // --- 配布 ---
-  // --- QRは「反映済みの内容」から作る ---
-  if(!TEA.pub){ TEA.pub=deep(CUR); TEA.pub.pubAt=Date.now(); save(); }
-  const dirty = !sameCfg(Object.assign(deep(CUR),{pubAt:0}), Object.assign(deep(TEA.pub),{pubAt:0}));
-  const db=$('#tDirty');
-  db.innerHTML = dirty
-    ? '<div class="dirtybox">✏️ 編集中の内容は、まだこのQRに反映されていません。<br>下のボタンを押すとQRが更新されます。</div>' : '';
-  const pb=$('#tPublish');
-  pb.textContent = dirty ? '🔄 いま編集中のテストをQRに反映' : '✅ QRは最新です（もう一度反映する）';
-  pb.style.background = dirty ? '' : 'var(--p3)';
-  const url=testUrl(TEA.pub);
-  $('#tUrl').value=url;
-  const box=$('#tQr'); box.innerHTML=''; box.appendChild(qrCanvas(url, 300));
-  renderQrInfo();
-  $('#tQrLen').textContent=`URLの長さ ${url.length} 文字`;
-  const gs=$('#tGasState');
-  if(gs){
-    const g=(TEA.pub||{}).gas;
-    gs.className = g ? 'sendbox ok' : 'sendbox ng';
-    gs.innerHTML = g
-      ? '☁️ 自動送信：<b>ON</b>　学生は解答後に「先生にスコアを送信」ボタンで提出できます'
-      : '⚠️ 自動送信：<b>OFF</b>　このQRでは学生が送信できません。「☁️ 自動集計」にURLを入れてから、もう一度QRに反映してください';
-  }
-  // file:// のままではQRを読んでも学生の端末では開けない
-  const local = /^(file:|blob:)/.test(location.protocol) || location.hostname==='';
-  const wb=$('#tHostWarn');
-  wb.style.display = local ? 'block' : 'none';
-  wb.innerHTML = local ? `<div class="hostwarn">
-    ⚠️ <b>このままではQRを配布できません。</b><br>
-    いまこのファイルはパソコン内（<code>file://</code>）から開かれているため、QRには
-    <code>${esc(location.href.split('#')[0]).slice(0,48)}…</code> というあなたのPC内の場所が入ります。
-    学生のスマホからは開けません。<br>
-    <b>インターネット上に置いてから</b>QRを作り直してください。
-    <ol>
-      <li>GitHub でリポジトリを作り、このHTMLを <code>index.html</code> という名前でアップロード</li>
-      <li>Settings → Pages → Branch を <code>main</code> にして保存</li>
-      <li>数分後に出る <code>https://ユーザー名.github.io/リポジトリ名/</code> を開く</li>
-      <li>そこで先生用タブを開き、テストを作り直してQRを表示</li>
-    </ol>
-    ※ https で開くと、発音チェック・復唱のマイク許可も1回で済むようになります。</div>` : '';
-  // --- 成績 ---
-  renderGrades();
-}
-function renderGrades(){
-  const sel=$('#gTest'); const ids=[...new Set(TEA.results.map(r=>r.t))];
-  const cur=sel.value;
-  sel.innerHTML='<option value="">すべてのテスト</option>'
-    + ids.map(id=>{ const t=TEA.results.find(r=>r.t===id);
-        return `<option value="${esc(id)}">${esc(t.ti||id)}</option>`; }).join('');
-  if(cur) sel.value=cur;
-  const rs=gradeRows(sel.value);
-  $('#gCount').innerHTML=`<b>${rs.length}</b> 件の解答`;
-  $('#gBody').innerHTML = rs.length ? rs.map((r,i)=>
-    `<tr><td>${esc(r.c||'')}</td><td class="num">${esc(r.s||'')}</td><td>${esc(r.n||'')}</td>
-      <td class="num">${r.o||0}/${r.q||0}</td><td class="num"><b>${r.r||0}%</b></td>
-      <td class="num">${Math.floor((r.sec||0)/60)}分${(r.sec||0)%60}秒</td>
-      <td class="num muted">${new Date(r.at||0).toLocaleString('ja-JP')}</td>
-      <td><button class="rst" data-del="${i}" title="削除">✕</button></td></tr>`).join('')
-    : '<tr><td colspan="8" class="empty">まだ解答がありません</td></tr>';
-  const byC={}; rs.forEach(r=>{ const c=r.c||'（未設定）'; (byC[c]=byC[c]||[]).push(r.r||0); });
-  $('#gStat').innerHTML = Object.keys(byC).length ? Object.keys(byC).map(c=>{
-    const a=byC[c], avg=a.reduce((x,y)=>x+y,0)/a.length;
-    return `<div style="margin-bottom:10px"><div class="row" style="justify-content:space-between">
-      <b>${esc(c)}</b><span class="muted">${a.length}人・平均 ${Math.round(avg)}%</span></div>
-      <div class="pbar"><i style="width:${avg}%"></i></div></div>`; }).join('') : '';
-}
-function teachBind(){
-  // ロック
-  $('#teachLockBtn').onclick=async()=>{
-    const v=$('#teachPass').value.trim();
-    if(!v){ toast('合い言葉を入力してください'); return; }
-    const hsh=await sha(v);
-    if(!TEA.pass){ TEA.pass=hsh; save(); ADMIN=true; toast('合い言葉を設定しました'); }
-    else if(TEA.pass===hsh){ ADMIN=true; }
-    else { toast('合い言葉が違います'); return; }
-    $('#teachPass').value=''; renderTeach();
-  };
-  $('#teachPass').onkeydown=e=>{ if(e.key==='Enter') $('#teachLockBtn').click(); };
-  $('#teachForget').onclick=()=>{ if(!confirm('合い言葉をリセットします。よろしいですか？')) return;
-    TEA.pass=''; ADMIN=false; save(); renderTeach(); };
-  // フォーム
-  const bindV=(id,fn)=>{ const el=$(id); if(el) el.oninput=()=>{ fn(el.value); renderTeach(); }; };
-  bindV('#tTitle', v=>CUR.title=v);
-  bindV('#tClasses', v=>CUR.classes=v.split('\n').map(s=>s.trim()).filter(Boolean));
-  bindV('#tStart', v=>CUR.start=Math.max(1,+v||1));
-  bindV('#tEnd', v=>CUR.end=Math.max(1,+v||1));
-  bindV('#tCount', v=>CUR.count=Math.max(1,+v||1));
-  bindV('#tGas', v=>{ CUR.gas=v.trim(); TEA.gas=v.trim(); save(); gasAutoSet($('#gAuto').checked); });
-  $('#tLimit').onchange=()=>{ CUR.limit=+$('#tLimit').value||0; renderTeach(); };
-  ['initial','mean','ja','hint'].forEach(k=>{ const el=$('#tOpt_'+k);
-    if(el) el.onchange=()=>{ CUR.opts=CUR.opts||{}; CUR.opts[k]=el.checked; renderTeach(); }; });
-  $('#tNew').onclick=()=>{ CUR=newTestCfg(); renderTeach(); toast('新しいテストを作成しました'); };
-  $('#tSave').onclick=()=>{ const i=TEA.tests.findIndex(t=>t.id===CUR.id);
-    if(i>=0) TEA.tests[i]=deep(CUR); else TEA.tests.push(deep(CUR));
-    save(); toast('テストを保存しました'); };
-  $('#tPublish').onclick=()=>{
-    const i=TEA.tests.findIndex(t=>t.id===CUR.id);
-    if(i>=0) TEA.tests[i]=deep(CUR); else TEA.tests.push(deep(CUR));
-    TEA.pub=deep(CUR); TEA.pub.pubAt=Date.now();
-    save(); renderTeach(); confetti(50);
-    toast('QRコードを更新しました');
-    const el=$('#tQrInfo'); if(el) scrollToEl(el,'center');
-  };
-  $('#tReseed').onclick=()=>{ CUR.seed=(Math.random()*1e6)|0; renderTeach(); toast('出題内容を入れ替えました'); };
-  // 配布
-  $('#tCopy').onclick=()=>{ $('#tUrl').select();
-    try{ navigator.clipboard.writeText($('#tUrl').value); }catch(e){ document.execCommand('copy'); }
-    toast('URLをコピーしました'); };
-  $('#tQrDl').onclick=()=>{ const cv=$('#tQr canvas'); if(!cv) return;
-    cv.toBlob(b=>dl(b, `qr_${(CUR.title||'test').replace(/[\\/:*?"<>|]/g,'_')}.png`)); };
-  $('#tPrint').onclick=()=>window.print();
-  $('#tPreview').onclick=()=>{ PREVIEW=true;
-    const src = TEA.pub || CUR;
-    if(TEA.pub && !sameCfg(Object.assign(deep(CUR),{pubAt:0}),Object.assign(deep(TEA.pub),{pubAt:0})))
-      toast('QRに反映済みの内容で表示します');
-    showExamEntry(deep(src)); };
-  // 結果取り込み
-  $('#gImport').onclick=()=>{ const r=importCodes($('#gPaste').value);
-    $('#gPaste').value=''; renderGrades();
-    toast(r.ok?`${r.ok}件を取り込みました${r.ng?`（${r.ng}件は失敗）`:''}`:'取り込めませんでした'); };
-  const drop=$('#gDrop');
-  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
-  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
-  drop.addEventListener('drop',e=>{
-    const fs=[...(e.dataTransfer?e.dataTransfer.files:[])];
-    let done=0, ok=0;
-    if(!fs.length) return;
-    fs.forEach(f=>{ const fr=new FileReader();
-      fr.onload=()=>{ const r=importCodes(fr.result); ok+=r.ok; if(++done===fs.length){ renderGrades(); toast(`${ok}件を取り込みました`); } };
-      fr.readAsText(f); });
-  });
-  $('#gFile').onchange=e=>{ const fs=[...e.target.files]; let done=0, ok=0;
-    fs.forEach(f=>{ const fr=new FileReader();
-      fr.onload=()=>{ const r=importCodes(fr.result); ok+=r.ok; if(++done===fs.length){ renderGrades(); toast(`${ok}件を取り込みました`); } };
-      fr.readAsText(f); }); e.target.value=''; };
-  $('#gFileBtn').onclick=()=>$('#gFile').click();
-  $('#gTest').onchange=renderGrades;
-  $('#gBody').addEventListener('click',ev=>{ const b=ev.target.closest('[data-del]'); if(!b) return;
-    const rs=gradeRows($('#gTest').value), r=rs[+b.dataset.del];
-    if(!r || !confirm(`${r.n} さんの解答を削除しますか？`)) return;
-    TEA.results=TEA.results.filter(x=>x!==r); save(); renderGrades(); });
-  $('#gClear').onclick=()=>{ if(!confirm('取り込んだ解答をすべて削除します。よろしいですか？')) return;
-    const id=$('#gTest').value;
-    TEA.results = id ? TEA.results.filter(r=>r.t!==id) : [];
-    save(); renderGrades(); };
-  $('#gXlsx').onclick=()=>{ const rs=gradeRows($('#gTest').value);
-    if(!rs.length){ toast('解答がありません'); return; }
-    dl(xlsxBlob(buildSheets($('#gTest').value)), `成績_${todayKey()}.xlsx`); };
-  $('#gCsv').onclick=()=>{ const rs=gradeRows($('#gTest').value);
-    if(!rs.length){ toast('解答がありません'); return; }
-    const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-    const rows=buildSheets($('#gTest').value)[0].rows;
-    dl(new Blob(['﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n')],{type:'text/csv'}), `成績_${todayKey()}.csv`); };
-  $('#gGasHelp').onclick=e=>{ e.preventDefault();
-    const c=$('#gasCode'); c.style.display = (c.style.display==='block')?'none':'block'; };
-  $('#gPull').onclick=()=>gasPull(false);
-  $('#gAuto').onchange=e=>{ TEA.auto=e.target.checked; save(); gasAutoSet(e.target.checked);
-    if(e.target.checked) gasPull(true); };
-}
+
+
+
+
+
 
 /* ---------- 起動 ---------- */
 function examBoot(){
-  teachBind();
+  
   $('#exStart').onclick=examBegin;
   const m=/[#&]t=([^&]+)/.exec(location.hash||'');
   if(m){
@@ -6019,8 +5507,7 @@ function examBoot(){
     }
     toast('テストのURLが正しくありません');
   }
-  const tb=$('#tabs').querySelector('[data-v="teach"]');
-  if(tb) tb.style.display='';
+  
 }
 examBoot();
 
