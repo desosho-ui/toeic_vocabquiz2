@@ -927,13 +927,14 @@ body.student .logo{flex:1}
     <label class="ck" style="margin-bottom:10px"><input type="checkbox" id="optGoogle" checked> 高品質な音声だけを表示する</label>
     <p class="muted" id="voiceNote" style="margin:0 0 10px"></p>
     <div id="voiceHelp"></div>
-    <p class="muted" id="voiceSample" style="margin:8px 0 0;font-size:12.5px"></p>
-    <div class="row">
+    <div class="row" style="margin-bottom:10px">
       <label class="ck">読み上げ音声 <select id="voiceSel" style="max-width:230px"></select></label>
-      <button class="btn g sm" id="voiceTest">🔊 試聴</button>
-      <label class="ck">速さ <input type="range" id="rate" min="0.6" max="1.2" step="0.05" value="0.95" style="width:120px"></label>
-      <button class="btn g sm" id="testVoice">🔊 テスト</button>
     </div>
+    <div class="row" style="margin-bottom:10px">
+      <label class="ck">速さ <input type="range" id="rate" min="0.6" max="1.2" step="0.05" value="0.95" style="width:120px"></label>
+    </div>
+    <button class="btn g sm" id="voiceTest">🔊 いまの声と速さで聞いてみる</button>
+    <p class="muted" id="voiceSample" style="margin:9px 0 0;font-size:12.5px"></p>
     <hr class="sep">
     <p class="sec-label">スマホで使う</p>
     <div id="pwaBox" class="muted" style="margin:0 0 4px">
@@ -5473,7 +5474,7 @@ $('#optSfx').checked=C.sfx; $('#optSfx').onchange=e=>{ C.sfx=e.target.checked; s
 $('#optConfetti').checked=C.confetti; $('#optConfetti').onchange=e=>{ C.confetti=e.target.checked; save(); if(C.confetti) confetti(40); };
 $('#voiceSel').onchange=e=>{ C.voice=e.target.value; C.voicePicked=true; save(); audStop(); loadVoices(); };
 $('#rate').value=C.rate; $('#rate').oninput=e=>{ C.rate=+e.target.value; save(); };
-$('#testVoice').onclick=()=>speakSample();
+
 $('#dailyGoal').value=C.goal; $('#dailyGoal').oninput=e=>{ C.goal=Math.max(1,+e.target.value||30); save(); };
 $('#expBtn').onclick=()=>{ dl(new Blob([JSON.stringify(S)],{type:'application/json'}),'toeic_vocab_record_'+todayKey()+'.json');
   toast('学習記録を書き出しました'); };
