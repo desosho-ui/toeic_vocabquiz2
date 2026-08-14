@@ -3571,11 +3571,16 @@ function utter(text,rate){
 /* ---------- 事前に用意した音声（audio/ フォルダがあれば使う） ----------
    端末まかせの読み上げより自然で、どの端末でも同じ音になる。
    見つからない語はこれまでどおり端末の読み上げにまわす。 */
-const audBase = () => location.href.split(/[#?]/)[0].replace(/[^/]*$/,'') + 'audio/';
+const audBase = () => window.__audioBase
+  ? window.__audioBase.replace(/\/?$/,'/') + 'audio/'
+  : location.href.split(/[#?]/)[0].replace(/[^/]*$/,'') + 'audio/';
 const audNorm = s => String(s||'').toLowerCase().replace(/[^a-z0-9']+/g,' ').trim();
+let audTried='';
 function audInit(){
   try{
-    fetch(audBase()+'manifest.json').then(r=>r.ok?r.json():null).then(j=>{
+    const base=audBase();
+    if(audTried===base) return; audTried=base;
+    fetch(base+'manifest.json').then(r=>r.ok?r.json():null).then(j=>{
       if(!j || !j.v) return;
       // v1（声が1種類だけ）も読めるようにしておく
       const vs = (j.v>=2 && j.voices) ? j.voices
@@ -3592,6 +3597,7 @@ function audInit(){
         if(TXT.w[kw]===undefined) TXT.w[kw]=e.id;
       });
       loadVoices();                       // 音声の選択肢に足す
+      if(window.__onAudio) try{ window.__onAudio(); }catch(e){}
     }).catch(()=>{});
   }catch(e){}
 }
