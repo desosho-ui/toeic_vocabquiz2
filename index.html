@@ -3587,6 +3587,7 @@ function audInit(){
                : [{id:'', name:j.voice||'内蔵音声', label:j.voice||'内蔵音声', w:j.w||[], s:j.s||[]}];
       AUD={ ext:j.ext||'mp3', rate:+j.rate||1, voices: vs.map(v=>({
         id:v.id||'', name:v.name||v.label||'', label:v.label||v.name||'',
+        ext:v.ext||j.ext||'mp3',            // 声ごとに形式が違うことがある
         wSet:new Set(v.w||[]), sSet:new Set(v.s||[]) })) };
       TXT={w:{},s:{},byId:{}};
       DATA.forEach(e=>{
@@ -3649,7 +3650,7 @@ function audPlaySeq(list, opt){
   const step=()=>{
     if(i>=list.length){ if(opt.onDone) opt.onDone(); return; }
     const c=list[i++];
-    audEl.src=audBase()+(c.v.id?c.v.id+'/':'')+c.kind+'/'+c.id+'.'+(AUD.ext||'mp3');
+    audEl.src=audBase()+(c.v.id?c.v.id+'/':'')+c.kind+'/'+c.id+'.'+(c.v.ext||AUD.ext||'mp3');
     // 音声ファイルは作った時点の速さが入っているので、その分を割り戻す
     const baked=+((AUD&&AUD.rate)||1) || 1;
     const want=+opt.rate || +C.rate || 1;
