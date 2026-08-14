@@ -3555,9 +3555,10 @@ if('speechSynthesis' in window){
   [250,700,1500,3000].forEach(ms=>setTimeout(loadVoices,ms));
 }
 function devVoice(){
-  if(C.voice==='auto') return null;      // 声を指定しない＝端末におまかせ
-  const m=/^dev:(.*)$/.exec(C.voice||'');
-  const n=m ? m[1] : (C.voice||'');
+  const cv=curVoice();
+  if(cv==='auto') return null;           // 声を指定しない＝端末におまかせ
+  const m=/^dev:(.*)$/.exec(cv);
+  const n=m ? m[1] : cv;
   return VOICES.find(v=>v.name===n) || VOICES[0] || null;
 }
 function utter(text,rate){
@@ -3604,8 +3605,17 @@ function headText(e){
   return (e.head||'').replace(/\b(sth|sb)\b/g,'something').replace(/\.\.\./g,' ');
 }
 function audList(){ return (AUD&&AUD.voices)||[]; }
+/* 受験中だけ、先生が指定した音声を使う。ふだんは学生自身の設定。 */
+function curVoice(){ return window.__examVoice || C.voice || ''; }
+function voiceLabel(v){
+  if(!v) return '学生の設定のまま';
+  if(v==='auto') return '📱 端末におまかせ';
+  const m=/^app:(.*)$/.exec(v);
+  if(m){ const a=audList().find(x=>x.id===m[1]); return '🎧 '+(a?a.label:m[1]); }
+  return (v.replace(/^dev:/,'')||'');
+}
 function audCur(){                        // 「アプリの音声」が選ばれていればそれを返す
-  const m=/^app:(.*)$/.exec(C.voice||'');
+  const m=/^app:(.*)$/.exec(curVoice());
   if(!m || !AUD) return null;
   return audList().find(v=>v.id===m[1]) || null;
 }
@@ -5670,11 +5680,13 @@ function examBegin(){
   C.initial=!!o.initial; C.mean=o.mean!==false; C.ja=o.ja!==false; C.hint=o.hint!==false;
   C.limit=cfg.limit||0; C.retry=false; C.count=cfg.count||20;
   const items=buildExamItems(cfg);
+  window.__examVoice = cfg.av || '';       // 受験中は先生の指定を使う
   startSession([], {items, exam:{cfg, seed:cfg.seed, who:{cls,name:nm,sid}}});
 }
 function examFinish(){
   if(Q.__done) return;                       // 二重送信・二重集計を防ぐ
   Q.__done=true;
+  window.__examVoice='';                     // 学生自身の設定に戻す
   $('#quizPlay').style.display='none';
   $('#quizEmpty').style.display='none';
   const ex=Q.exam, cfg=ex.cfg, who=ex.who;
