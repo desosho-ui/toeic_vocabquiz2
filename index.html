@@ -91,6 +91,12 @@ details.fold>summary:hover{background:var(--p1s)}
 details.fold>.foldbody{padding:2px 16px 16px}
 .manualbox{border:2px dashed var(--edge);border-radius:16px;padding:16px;background:var(--p4s);margin-top:6px}
 .btn.big{width:100%;padding:16px;font-size:17px}
+.voicetip{background:var(--p6s);border:2px solid var(--p6);border-radius:12px;padding:11px 13px;
+  font-size:12.5px;font-weight:700;line-height:1.7;margin:0 0 10px}
+.savestate{margin-top:11px;border-radius:12px;padding:9px 12px;font-size:13px;font-weight:800;border:2px solid}
+.savestate.ok{background:var(--p3s);border-color:var(--p3);color:#046a52}
+.savestate.new{background:var(--p6s);border-color:var(--p6);color:#0b5c7a}
+.savestate.edit{background:var(--p4s);border-color:var(--p4);color:#8a6100}
 .mailto{display:inline-block;margin-top:4px;font-family:monospace;font-size:14px;
   background:#fff;border:2px solid var(--edge);border-radius:9px;padding:3px 9px}
 a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
@@ -918,10 +924,12 @@ body.student .logo{flex:1}
       <label class="ck"><input type="checkbox" id="optSfx" checked> 正解・不正解の効果音</label>
       <label class="ck"><input type="checkbox" id="optConfetti" checked> 紙吹雪などの演出</label>
     </div>
-    <label class="ck" style="margin-bottom:10px"><input type="checkbox" id="optGoogle" checked> Google音声だけを使う</label>
+    <label class="ck" style="margin-bottom:10px"><input type="checkbox" id="optGoogle" checked> 高品質な音声だけを表示する</label>
     <p class="muted" id="voiceNote" style="margin:0 0 10px"></p>
+    <div id="voiceHelp"></div>
     <div class="row">
       <label class="ck">読み上げ音声 <select id="voiceSel" style="max-width:230px"></select></label>
+      <button class="btn g sm" id="voiceTest">🔊 試聴</button>
       <label class="ck">速さ <input type="range" id="rate" min="0.6" max="1.2" step="0.05" value="0.95" style="width:120px"></label>
       <button class="btn g sm" id="testVoice">🔊 テスト</button>
     </div>
@@ -3433,29 +3441,53 @@ function countUp(el,to,suffix,ms){
 }
 
 /* ---------- speech ---------- */
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+/* 端末に入っている音声の「質」を推定して並べ替える */
+function voiceScore(v){
+  const n=v.name||'';
+  if(/google/i.test(n))                       return 100;   // Android / Chrome
+  if(/natural/i.test(n))                      return 96;    // Microsoft Natural
+  if(/premium/i.test(n))                      return 92;    // Apple プレミアム
+  if(/enhanced/i.test(n))                     return 88;    // Apple 拡張
+  if(/siri/i.test(n))                         return 86;
+  if(/^Microsoft/i.test(n))                   return 70;
+  if(/\b(Ava|Zoe|Allison|Susan|Nicky|Aaron|Evan|Joelle|Noelle|Serena|Samantha|Daniel|Karen|Moira)\b/i.test(n)) return 60;
+  return 40;
+}
+function voiceTag(s){ return s>=88 ? '⭐ ' : (s>=70 ? '○ ' : ''); }
 let VOICES=[];
 function loadVoices(){
   let all=[]; try{ all=speechSynthesis.getVoices()||[]; }catch(e){}
-  const en=all.filter(v=>/^en/i.test(v.lang));
-  const google=en.filter(v=>/google/i.test(v.name));
-  VOICES = C.googleOnly ? google : en;                 // Google音声のみ（他の音声に勝手に入れ替わらない）
-  const sel=$('#voiceSel'), note=$('#voiceNote');
+  const en=all.filter(v=>/^en/i.test(v.lang)).sort((a,b)=>voiceScore(b)-voiceScore(a)
+      || (a.name||'').localeCompare(b.name||''));
+  const hi=en.filter(v=>voiceScore(v)>=86);
+  // 「高品質だけ」でも0件になる端末（iPhoneなど）では、上位のものを出す
+  VOICES = (C.googleOnly!==false) ? (hi.length ? hi : en.slice(0,6)) : en;
+  const sel=$('#voiceSel'), note=$('#voiceNote'), help=$('#voiceHelp');
   if(!sel) return;
   sel.innerHTML='';
   if(VOICES.length){
     VOICES.forEach(v=>{ const o=document.createElement('option'); o.value=v.name;
-      o.textContent=v.name.replace(/^Google\s*/i,'Google ')+' ('+v.lang+')'; sel.appendChild(o); });
+      o.textContent=voiceTag(voiceScore(v))+v.name.replace(/^Google\s*/i,'Google ')+' ('+v.lang+')';
+      sel.appendChild(o); });
     if(C.voice && VOICES.some(v=>v.name===C.voice)) sel.value=C.voice; else C.voice=sel.value;
     sel.disabled=false;
-    if(note) note.textContent = C.googleOnly ? `Google音声 ${VOICES.length} 件を使用中。` : `英語音声 ${VOICES.length} 件から選べます。`;
+    const best=voiceScore(VOICES[0]);
+    if(note) note.textContent = best>=88
+      ? `高品質な音声 ${VOICES.length} 件が使えます。⭐ の付いたものがおすすめです。`
+      : `この端末で使える英語音声 ${VOICES.length} 件です。🔊 試聴で聞き比べてください。`;
+    if(help) help.innerHTML = (IOS && best<88)
+      ? `<div class="voicetip">📱 <b>iPhone / iPad をお使いの場合</b><br>
+         Safari には、端末に入っている高品質な音声の一部しか渡されません。
+         <b>設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語</b> で
+         「Ava（拡張）」などをダウンロードすると、ここに出てくることがあります。
+         （出てこない場合は iOS 側の制限で、アプリからは変えられません）</div>` : '';
   } else {
-    sel.innerHTML = C.googleOnly
-      ? '<option>（この端末にGoogle音声がありません）</option>'
-      : '<option>（利用可能な英語音声なし）</option>';
+    sel.innerHTML='<option>（この端末に英語音声がありません）</option>';
     sel.disabled=true; C.voice='';
-    if(note) note.innerHTML = C.googleOnly
-      ? 'この端末では Google 音声が見つかりません（iPhone / iPad の Safari には搭載されていません）。読み上げは端末標準の英語音声で再生されます。他の音声から選びたい場合はチェックを外してください。'
-      : '';
+    if(note) note.textContent='';
+    if(help) help.innerHTML='';
   }
 }
 if('speechSynthesis' in window){
@@ -3471,7 +3503,65 @@ function utter(text,rate){
   u.rate=rate||(+C.rate||.95);
   return u;
 }
+/* ---------- 事前に用意した音声（audio/ フォルダがあれば使う） ----------
+   端末まかせの読み上げより自然で、どの端末でも同じ音になる。
+   見つからない語はこれまでどおり端末の読み上げにまわす。 */
+let AUD=null, AUDW=null, AUDS=null, TXT=null;
+const audBase = () => location.href.split(/[#?]/)[0].replace(/[^/]*$/,'') + 'audio/';
+const audNorm = s => String(s||'').toLowerCase().replace(/[^a-z0-9']+/g,' ').trim();
+function audInit(){
+  try{
+    fetch(audBase()+'manifest.json').then(r=>r.ok?r.json():null).then(j=>{
+      if(!j || !j.v) return;
+      AUD=j; AUDW=new Set(j.w||[]); AUDS=new Set(j.s||[]);
+      TXT={w:{},s:{}};
+      DATA.forEach(e=>{
+        TXT.s[audNorm(e.ex)]=e.id;
+        TXT.w[audNorm((e.head||'').replace(/\b(sth|sb)\b/g,'something').replace(/\.\.\./g,' '))]=e.id;
+      });
+    }).catch(()=>{});
+  }catch(e){}
+}
+let audEl=null, audTimer=null;
+function audPlaying(){ return !!(audEl && !audEl.paused && !audEl.ended); }
+function audStop(){
+  clearTimeout(audTimer); audTimer=null;
+  if(audEl){ try{ audEl.onended=null; audEl.onerror=null; audEl.pause(); }catch(e){} }
+}
+function audFind(text){
+  if(!AUD || !TXT) return null;
+  const k=audNorm(text);
+  if(TXT.s[k]!==undefined && AUDS.has(TXT.s[k])) return {kind:'s', id:TXT.s[k], t:text};
+  if(TXT.w[k]!==undefined && AUDW.has(TXT.w[k])) return {kind:'w', id:TXT.w[k], t:text};
+  return null;
+}
+function audPlaySeq(list){
+  audStop();
+  if(!audEl){ audEl=new Audio(); audEl.preload='auto'; }
+  let i=0;
+  const fail=()=>{ audStop(); ttsSeq(list.map(c=>c.t)); };
+  const step=()=>{
+    if(i>=list.length) return;
+    const c=list[i++];
+    audEl.src=audBase()+c.kind+'/'+c.id+'.'+(AUD.ext||'mp3');
+    audEl.playbackRate=Math.min(2, Math.max(.5, +C.rate||.95));
+    audEl.onended=()=>{ audTimer=setTimeout(step, i<list.length?200:0); };
+    audEl.onerror=fail;
+    const pr=audEl.play(); if(pr&&pr.catch) pr.catch(fail);
+  };
+  step();
+}
 function speakSeq(parts){
+  const list=parts.filter(Boolean);
+  if(!list.length) return;
+  audStop();
+  if(AUD){
+    const cl=list.map(audFind);
+    if(cl.every(Boolean)){ audPlaySeq(cl); return; }    // 全部そろっているときだけ使う
+  }
+  ttsSeq(list);
+}
+function ttsSeq(parts){
   if(!('speechSynthesis' in window)) return;
   try{
     speechSynthesis.cancel();
@@ -3483,6 +3573,7 @@ function speakSeq(parts){
   }catch(e){}
 }
 function speak(text){ speakSeq([text]); }
+audInit();   // ← audBase/audNorm を定義したあとに呼ぶ（constは巻き上げ対象外）
 /* 「意味→英語」「発音チェック」では見出し語を読んでから例文を読む */
 function speakEntry(e,mode){
   const head=(e.head||'').replace(/\b(sth|sb)\b/g,'something').replace(/\.\.\./g,' ');
@@ -3565,6 +3656,7 @@ function srStop(){ srDisarm(); }
    （自分の再生音を認識してしまうのを防ぐ） */
 let ttsWatch=null, ttsWaiters=[];
 function ttsSpeaking(){
+  if(audPlaying()) return true;
   try{ return !!(speechSynthesis.speaking || speechSynthesis.pending); }catch(e){ return false; }
 }
 function ttsWatchStart(){
@@ -5151,7 +5243,7 @@ function abNextItem(){
 function abStart(){
   const sel=abSelect();
   if(!sel.length){ toast('該当する語がありません'); return; }
-  try{ speechSynthesis.cancel(); }catch(e){}
+  try{ speechSynthesis.cancel(); }catch(e){} audStop();
   AB.items=sel; AB.i=0; AB.on=true; AB.paused=false; AB.token++;
   $('#abPlayer').style.display='block';
   $('#abToggle').textContent='⏸';
@@ -5161,13 +5253,13 @@ function abStart(){
 function abStop(){
   AB.on=false; AB.paused=false; AB.token++;
   clearTimeout(AB.timer);
-  try{ speechSynthesis.cancel(); }catch(e){}
+  try{ speechSynthesis.cancel(); }catch(e){} audStop();
   const pl=$('#abPlayer'); if(pl) pl.style.display='none';
 }
 function abJump(d){
   if(!AB.on) return;
   AB.token++; clearTimeout(AB.timer);
-  try{ speechSynthesis.cancel(); }catch(e){}
+  try{ speechSynthesis.cancel(); }catch(e){} audStop();
   AB.i=Math.max(0, Math.min(AB.items.length-1, AB.i+d));
   AB.paused=false; $('#abToggle').textContent='⏸';
   abLoadItem(); abSpeakSeg();
@@ -5180,7 +5272,7 @@ $('#abToggle').onclick=()=>{
   if(!AB.on) return;
   AB.paused=!AB.paused;
   $('#abToggle').textContent=AB.paused?'▶':'⏸';
-  if(AB.paused){ AB.token++; clearTimeout(AB.timer); try{ speechSynthesis.cancel(); }catch(e){} }
+  if(AB.paused){ AB.token++; clearTimeout(AB.timer); try{ speechSynthesis.cancel(); }catch(e){} audStop(); }
   else { AB.token++; abSpeakSeg(); }
 };
 $('#abStar').onclick=()=>{ const e=AB.items[AB.i]; if(!e) return;
@@ -5295,7 +5387,10 @@ $('#installBtn').onclick=async()=>{ if(!deferredPrompt) return;
   deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; $('#installBtn').style.display='none'; };
 $('#optGoogle').checked=C.googleOnly!==false;
 $('#optGoogle').onchange=e=>{ C.googleOnly=e.target.checked; save(); loadVoices();
-  toast(C.googleOnly?'Google音声のみに絞りました':'すべての英語音声から選べます'); };
+  toast(C.googleOnly?'高品質な音声に絞りました':'すべての英語音声から選べます'); };
+if($('#voiceTest')) $('#voiceTest').onclick=()=>{
+  try{ speechSynthesis.cancel(); }catch(e){} audStop();
+  speak('The manager approved the new budget last week.'); };
 $('#optSfx').checked=C.sfx; $('#optSfx').onchange=e=>{ C.sfx=e.target.checked; save(); if(C.sfx) sfx('ok'); };
 $('#optConfetti').checked=C.confetti; $('#optConfetti').onchange=e=>{ C.confetti=e.target.checked; save(); if(C.confetti) confetti(40); };
 $('#voiceSel').onchange=e=>{ C.voice=e.target.value; save(); };
