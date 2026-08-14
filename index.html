@@ -888,6 +888,7 @@ body.student .logo{flex:1}
     <div class="card">
       <h3>📱 配布する（QRコード）</h3>
       <div id="tHostWarn" style="display:none"></div>
+      <div id="tGasState" class="sendbox"></div>
       <div id="tQr" style="text-align:center;margin-bottom:10px"></div>
       <p class="muted" id="tQrLen" style="text-align:center;margin:0 0 12px"></p>
       <textarea id="tUrl" readonly style="width:100%;height:70px;font-size:11px;font-family:monospace;
@@ -5548,6 +5549,7 @@ function newTestCfg(){
   return {id:'t'+Date.now().toString(36), title:'語彙テスト',
     classes:['1年A組','1年B組'], cats:['word'], start:1, end:100, count:20,
     modes:['type'], limit:0, seed:(Math.random()*1e6)|0,
+    gas:(TEA.gas||''),                       // 設定済みの送信先を引き継ぐ
     opts:{initial:false, mean:true, ja:true, hint:true}, at:Date.now()};
 }
 function cfgPool(cfg){
@@ -5775,6 +5777,7 @@ function renderTeach(){
     return; }
   $('#teachLock').style.display='none'; $('#teachMain').style.display='block';
   if(!CUR) CUR = TEA.tests.length ? JSON.parse(JSON.stringify(TEA.tests[TEA.tests.length-1])) : newTestCfg();
+  if(!CUR.gas && TEA.gas) CUR.gas = TEA.gas;   // 送信先が空なら設定済みのものを使う
   // --- フォーム ---
   $('#tTitle').value=CUR.title||'';
   $('#tClasses').value=(CUR.classes||[]).join('\n');
@@ -5804,6 +5807,13 @@ function renderTeach(){
   $('#tUrl').value=url;
   const box=$('#tQr'); box.innerHTML=''; box.appendChild(qrCanvas(url, 300));
   $('#tQrLen').textContent=`URLの長さ ${url.length} 文字`;
+  const gs=$('#tGasState');
+  if(gs){
+    gs.className = CUR.gas ? 'sendbox ok' : 'sendbox ng';
+    gs.innerHTML = CUR.gas
+      ? '☁️ 自動送信：<b>ON</b>　学生は解答後に「先生にスコアを送信」ボタンで提出できます'
+      : '⚠️ 自動送信：<b>OFF</b>　このQRでは学生が送信できません。下の「☁️ 自動集計」にURLを入れると、このQRにも反映されます';
+  }
   // file:// のままではQRを読んでも学生の端末では開けない
   const local = /^(file:|blob:)/.test(location.protocol) || location.hostname==='';
   const wb=$('#tHostWarn');
