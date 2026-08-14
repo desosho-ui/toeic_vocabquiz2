@@ -3441,6 +3441,7 @@ function countUp(el,to,suffix,ms){
 }
 
 /* ---------- speech ---------- */
+let AUD=null, TXT=null;      // 事前に用意した音声（下の audInit で読み込む）
 const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
         || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
 /* 端末に入っている音声の「質」を推定して並べ替える */
@@ -3467,28 +3468,55 @@ function loadVoices(){
   const sel=$('#voiceSel'), note=$('#voiceNote'), help=$('#voiceHelp');
   if(!sel) return;
   sel.innerHTML='';
+  const app=audList();
+  // ① アプリに用意された音声（どの端末でも同じ）
+  if(app.length){
+    const g=document.createElement('optgroup'); g.label='アプリの音声（どの端末でも同じ）';
+    app.forEach(v=>{ const o=document.createElement('option');
+      o.value='app:'+v.id; o.textContent='🎧 '+v.label; g.appendChild(o); });
+    sel.appendChild(g);
+  }
+  // ② この端末の音声
   if(VOICES.length){
-    VOICES.forEach(v=>{ const o=document.createElement('option'); o.value=v.name;
+    const g=document.createElement('optgroup'); g.label='この端末の音声';
+    VOICES.forEach(v=>{ const o=document.createElement('option');
+      o.value='dev:'+v.name;
       o.textContent=voiceTag(voiceScore(v))+v.name.replace(/^Google\s*/i,'Google ')+' ('+v.lang+')';
-      sel.appendChild(o); });
-    if(C.voice && VOICES.some(v=>v.name===C.voice)) sel.value=C.voice; else C.voice=sel.value;
-    sel.disabled=false;
-    const best=voiceScore(VOICES[0]);
-    if(note) note.textContent = best>=88
-      ? `高品質な音声 ${VOICES.length} 件が使えます。⭐ の付いたものがおすすめです。`
-      : `この端末で使える英語音声 ${VOICES.length} 件です。🔊 試聴で聞き比べてください。`;
-    if(help) help.innerHTML = (IOS && best<88)
-      ? `<div class="voicetip">📱 <b>iPhone / iPad をお使いの場合</b><br>
-         Safari には、端末に入っている高品質な音声の一部しか渡されません。
-         <b>設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語</b> で
-         「Ava（拡張）」などをダウンロードすると、ここに出てくることがあります。
-         （出てこない場合は iOS 側の制限で、アプリからは変えられません）</div>` : '';
-  } else {
+      g.appendChild(o); });
+    sel.appendChild(g);
+  }
+  if(!sel.options.length){
     sel.innerHTML='<option>（この端末に英語音声がありません）</option>';
     sel.disabled=true; C.voice='';
-    if(note) note.textContent='';
-    if(help) help.innerHTML='';
+    if(note) note.textContent=''; if(help) help.innerHTML='';
+    return;
   }
+  sel.disabled=false;
+  // 保存されている選択を復元。無ければアプリの音声を優先。
+  const vals=[...sel.options].map(o=>o.value);
+  if(C.voice && !/^(app|dev):/.test(C.voice) && vals.includes('dev:'+C.voice))
+    C.voice='dev:'+C.voice;                      // 前のバージョンからの引き継ぎ
+  // 自分で選んでいない人には、アプリの音声を既定にする（あとから届いた場合も）
+  if(!C.voicePicked && app.length) C.voice='app:'+app[0].id;
+  if(!C.voice || !vals.includes(C.voice)) C.voice = vals[0];
+  sel.value=C.voice;
+
+  const usingApp=!!audCur();
+  if(note) note.textContent = usingApp
+    ? 'アプリに用意された音声を使っています。iPhone でも Android でも同じ声で聞けます。'
+    : (VOICES.length && voiceScore(VOICES[0])>=88
+      ? `この端末の音声を使っています。⭐ の付いたものがおすすめです。`
+      : 'この端末の音声を使っています。🔊 試聴で聞き比べてください。');
+  if(help) help.innerHTML = (IOS && !usingApp && (!VOICES.length || voiceScore(VOICES[0])<88))
+    ? (app.length
+      ? `<div class="voicetip">📱 <b>iPhone / iPad をお使いの場合</b><br>
+         Safari には、端末に入っている高品質な音声の一部しか渡されません。
+         上の<b>「アプリの音声」</b>を選ぶと、その制限を受けずに高品質な音声で聞けます。</div>`
+      : `<div class="voicetip">📱 <b>iPhone / iPad をお使いの場合</b><br>
+         Safari には、端末に入っている高品質な音声の一部しか渡されません。
+         <b>設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語</b> で
+         「Ava（拡張）」などをダウンロードすると、ここに出てくることがあります。</div>`)
+    : '';
 }
 if('speechSynthesis' in window){
   loadVoices();
@@ -3496,9 +3524,14 @@ if('speechSynthesis' in window){
   // Android Chrome などは初回 getVoices() が空を返すことがあるため数回リトライ
   [250,700,1500,3000].forEach(ms=>setTimeout(loadVoices,ms));
 }
+function devVoice(){
+  const m=/^dev:(.*)$/.exec(C.voice||'');
+  const n=m ? m[1] : (C.voice||'');
+  return VOICES.find(v=>v.name===n) || VOICES[0] || null;
+}
 function utter(text,rate){
   const u=new SpeechSynthesisUtterance(text);
-  const v=VOICES.find(v=>v.name===C.voice)||VOICES[0];
+  const v=devVoice();
   if(v){u.voice=v;u.lang=v.lang;} else u.lang='en-US';
   u.rate=rate||(+C.rate||.95);
   return u;
@@ -3506,19 +3539,24 @@ function utter(text,rate){
 /* ---------- 事前に用意した音声（audio/ フォルダがあれば使う） ----------
    端末まかせの読み上げより自然で、どの端末でも同じ音になる。
    見つからない語はこれまでどおり端末の読み上げにまわす。 */
-let AUD=null, AUDW=null, AUDS=null, TXT=null;
 const audBase = () => location.href.split(/[#?]/)[0].replace(/[^/]*$/,'') + 'audio/';
 const audNorm = s => String(s||'').toLowerCase().replace(/[^a-z0-9']+/g,' ').trim();
 function audInit(){
   try{
     fetch(audBase()+'manifest.json').then(r=>r.ok?r.json():null).then(j=>{
       if(!j || !j.v) return;
-      AUD=j; AUDW=new Set(j.w||[]); AUDS=new Set(j.s||[]);
+      // v1（声が1種類だけ）も読めるようにしておく
+      const vs = (j.v>=2 && j.voices) ? j.voices
+               : [{id:'', name:j.voice||'内蔵音声', label:j.voice||'内蔵音声', w:j.w||[], s:j.s||[]}];
+      AUD={ ext:j.ext||'mp3', voices: vs.map(v=>({
+        id:v.id||'', name:v.name||v.label||'', label:v.label||v.name||'',
+        wSet:new Set(v.w||[]), sSet:new Set(v.s||[]) })) };
       TXT={w:{},s:{}};
       DATA.forEach(e=>{
         TXT.s[audNorm(e.ex)]=e.id;
         TXT.w[audNorm((e.head||'').replace(/\b(sth|sb)\b/g,'something').replace(/\.\.\./g,' '))]=e.id;
       });
+      loadVoices();                       // 音声の選択肢に足す
     }).catch(()=>{});
   }catch(e){}
 }
@@ -3528,11 +3566,17 @@ function audStop(){
   clearTimeout(audTimer); audTimer=null;
   if(audEl){ try{ audEl.onended=null; audEl.onerror=null; audEl.pause(); }catch(e){} }
 }
+function audList(){ return (AUD&&AUD.voices)||[]; }
+function audCur(){                        // 「アプリの音声」が選ばれていればそれを返す
+  const m=/^app:(.*)$/.exec(C.voice||'');
+  if(!m || !AUD) return null;
+  return audList().find(v=>v.id===m[1]) || null;
+}
 function audFind(text){
-  if(!AUD || !TXT) return null;
+  const V=audCur(); if(!V || !TXT) return null;
   const k=audNorm(text);
-  if(TXT.s[k]!==undefined && AUDS.has(TXT.s[k])) return {kind:'s', id:TXT.s[k], t:text};
-  if(TXT.w[k]!==undefined && AUDW.has(TXT.w[k])) return {kind:'w', id:TXT.w[k], t:text};
+  if(TXT.s[k]!==undefined && V.sSet.has(TXT.s[k])) return {kind:'s', id:TXT.s[k], t:text, v:V};
+  if(TXT.w[k]!==undefined && V.wSet.has(TXT.w[k])) return {kind:'w', id:TXT.w[k], t:text, v:V};
   return null;
 }
 function audPlaySeq(list){
@@ -3543,7 +3587,7 @@ function audPlaySeq(list){
   const step=()=>{
     if(i>=list.length) return;
     const c=list[i++];
-    audEl.src=audBase()+c.kind+'/'+c.id+'.'+(AUD.ext||'mp3');
+    audEl.src=audBase()+(c.v.id?c.v.id+'/':'')+c.kind+'/'+c.id+'.'+(AUD.ext||'mp3');
     audEl.playbackRate=Math.min(2, Math.max(.5, +C.rate||.95));
     audEl.onended=()=>{ audTimer=setTimeout(step, i<list.length?200:0); };
     audEl.onerror=fail;
@@ -3555,7 +3599,7 @@ function speakSeq(parts){
   const list=parts.filter(Boolean);
   if(!list.length) return;
   audStop();
-  if(AUD){
+  if(audCur()){
     const cl=list.map(audFind);
     if(cl.every(Boolean)){ audPlaySeq(cl); return; }    // 全部そろっているときだけ使う
   }
@@ -5218,7 +5262,7 @@ function abSpeakSeg(){
   try{
     u=new SpeechSynthesisUtterance(seg.t);
     if(seg.ja){ const v=jaVoice(); if(v){ u.voice=v; u.lang=v.lang; } else u.lang='ja-JP'; }
-    else { const v=VOICES.find(x=>x.name===C.voice)||VOICES[0]; if(v){ u.voice=v; u.lang=v.lang; } else u.lang='en-US'; }
+    else { const v=devVoice(); if(v){ u.voice=v; u.lang=v.lang; } else u.lang='en-US'; }
     u.rate=+A.rate||.95;
     u.onend=()=>{ if(my!==AB.token||!AB.on||AB.paused) return;
       AB.seg++;
@@ -5393,7 +5437,7 @@ if($('#voiceTest')) $('#voiceTest').onclick=()=>{
   speak('The manager approved the new budget last week.'); };
 $('#optSfx').checked=C.sfx; $('#optSfx').onchange=e=>{ C.sfx=e.target.checked; save(); if(C.sfx) sfx('ok'); };
 $('#optConfetti').checked=C.confetti; $('#optConfetti').onchange=e=>{ C.confetti=e.target.checked; save(); if(C.confetti) confetti(40); };
-$('#voiceSel').onchange=e=>{ C.voice=e.target.value; save(); };
+$('#voiceSel').onchange=e=>{ C.voice=e.target.value; C.voicePicked=true; save(); audStop(); loadVoices(); };
 $('#rate').value=C.rate; $('#rate').oninput=e=>{ C.rate=+e.target.value; save(); };
 $('#testVoice').onclick=()=>speak('The quarterly report will be distributed at the meeting.');
 $('#dailyGoal').value=C.goal; $('#dailyGoal').oninput=e=>{ C.goal=Math.max(1,+e.target.value||30); save(); };
