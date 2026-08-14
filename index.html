@@ -927,6 +927,7 @@ body.student .logo{flex:1}
     <label class="ck" style="margin-bottom:10px"><input type="checkbox" id="optGoogle" checked> 高品質な音声だけを表示する</label>
     <p class="muted" id="voiceNote" style="margin:0 0 10px"></p>
     <div id="voiceHelp"></div>
+    <p class="muted" id="voiceSample" style="margin:8px 0 0;font-size:12.5px"></p>
     <div class="row">
       <label class="ck">読み上げ音声 <select id="voiceSel" style="max-width:230px"></select></label>
       <button class="btn g sm" id="voiceTest">🔊 試聴</button>
@@ -3551,10 +3552,13 @@ function audInit(){
       AUD={ ext:j.ext||'mp3', voices: vs.map(v=>({
         id:v.id||'', name:v.name||v.label||'', label:v.label||v.name||'',
         wSet:new Set(v.w||[]), sSet:new Set(v.s||[]) })) };
-      TXT={w:{},s:{}};
+      TXT={w:{},s:{},byId:{}};
       DATA.forEach(e=>{
-        TXT.s[audNorm(e.ex)]=e.id;
-        TXT.w[audNorm((e.head||'').replace(/\b(sth|sb)\b/g,'something').replace(/\.\.\./g,' '))]=e.id;
+        TXT.byId[e.id]=e;
+        // 同じ見出し語・同じ例文が複数あるので、最初に出てきたものを残す
+        const ks=audNorm(e.ex), kw=audNorm(headText(e));
+        if(TXT.s[ks]===undefined) TXT.s[ks]=e.id;
+        if(TXT.w[kw]===undefined) TXT.w[kw]=e.id;
       });
       loadVoices();                       // 音声の選択肢に足す
     }).catch(()=>{});
@@ -3566,15 +3570,25 @@ function audStop(){
   clearTimeout(audTimer); audTimer=null;
   if(audEl){ try{ audEl.onended=null; audEl.onerror=null; audEl.pause(); }catch(e){} }
 }
+function headText(e){
+  return (e.head||'').replace(/\b(sth|sb)\b/g,'something').replace(/\.\.\./g,' ');
+}
 function audList(){ return (AUD&&AUD.voices)||[]; }
 function audCur(){                        // 「アプリの音声」が選ばれていればそれを返す
   const m=/^app:(.*)$/.exec(C.voice||'');
   if(!m || !AUD) return null;
   return audList().find(v=>v.id===m[1]) || null;
 }
-function audFind(text){
+function audFind(text, id){
   const V=audCur(); if(!V || !TXT) return null;
   const k=audNorm(text);
+  // ① 語彙番号が分かっているとき（同じ綴りの語が複数あっても取り違えない）
+  const e = (id!=null) ? TXT.byId[id] : null;
+  if(e){
+    if(audNorm(e.ex)===k   && V.sSet.has(id)) return {kind:'s', id, t:text, v:V};
+    if(audNorm(headText(e))===k && V.wSet.has(id)) return {kind:'w', id, t:text, v:V};
+  }
+  // ② 分からないときは文章から引く
   if(TXT.s[k]!==undefined && V.sSet.has(TXT.s[k])) return {kind:'s', id:TXT.s[k], t:text, v:V};
   if(TXT.w[k]!==undefined && V.wSet.has(TXT.w[k])) return {kind:'w', id:TXT.w[k], t:text, v:V};
   return null;
@@ -3595,12 +3609,12 @@ function audPlaySeq(list){
   };
   step();
 }
-function speakSeq(parts){
+function speakSeq(parts, id){
   const list=parts.filter(Boolean);
   if(!list.length) return;
   audStop();
   if(audCur()){
-    const cl=list.map(audFind);
+    const cl=list.map(t=>audFind(t, id));
     if(cl.every(Boolean)){ audPlaySeq(cl); return; }    // 全部そろっているときだけ使う
   }
   ttsSeq(list);
@@ -3617,13 +3631,31 @@ function ttsSeq(parts){
   }catch(e){}
 }
 function speak(text){ speakSeq([text]); }
+/* 試聴用。アプリの音声を選んでいるときは、その音声が実在する語彙を選ぶ。 */
+function sampleEntry(){
+  const V=audCur();
+  if(V){
+    const ok=DATA.filter(e=>V.sSet.has(e.id) && V.wSet.has(e.id) && (e.ex||'').length>=25);
+    if(ok.length) return ok[Math.floor(Math.random()*ok.length)];
+  }
+  const any=DATA.filter(e=>(e.ex||'').length>=25);
+  return any[Math.floor(Math.random()*any.length)] || DATA[0];
+}
+function speakSample(){
+  try{ speechSynthesis.cancel(); }catch(e){}
+  audStop();
+  const e=sampleEntry();
+  speakEntry(e,'recall');            // 見出し語 → 例文
+  return e;
+}
 audInit();   // ← audBase/audNorm を定義したあとに呼ぶ（constは巻き上げ対象外）
 /* 「意味→英語」「発音チェック」では見出し語を読んでから例文を読む */
 function speakEntry(e,mode){
-  const head=(e.head||'').replace(/\b(sth|sb)\b/g,'something').replace(/\.\.\./g,' ');
-  if(mode==='recall'||mode==='spk') speakSeq([head, e.ex]);
-  else speak(e.ex);
+  if(mode==='recall'||mode==='spk') speakSeq([headText(e), e.ex], e.id);
+  else speakSeq([e.ex], e.id);
 }
+function speakHead(e){ speakSeq([headText(e)], e.id); }
+function speakEx(e){ speakSeq([e.ex], e.id); }
 
 /* ---------- 音声認識（発音チェック・復唱用） ----------
    マイクの許可ダイアログが毎回出ないよう、
@@ -4068,9 +4100,9 @@ function renderQ(){
     opts.forEach((o,i)=>{ const b=document.createElement('button'); b.className='opt'; b.type='button';
       b.innerHTML=`<span class="kbd">${i+1}</span><span>${esc(o)}</span>`;
       b.onclick=()=>submitMC(o,opts,box); box.appendChild(b); });
-    const say=()=>speak((e.head||'').replace(/\.\.\./g,' '));
+    const say=()=>speakHead(e);
     $('#repBtn').onclick=say;
-    $('#exBtn').onclick=()=>{ Q.hintUsed=true; speak(e.ex); $('#exBtn').disabled=true; };
+    $('#exBtn').onclick=()=>{ Q.hintUsed=true; speakEx(e); $('#exBtn').disabled=true; };
     setTimeout(say,250);
     $('#qKbd').innerHTML='<kbd>1</kbd>–<kbd>4</kbd> で選択　<kbd>S</kbd> もう一度聞く';
   } else if(it.mode==='dict'){
@@ -4087,7 +4119,7 @@ function renderQ(){
         <button class="btn" id="okBtn">解答</button>
         <button class="btn g" id="hintBtn" title="意味を見る">💡</button>
         <button class="btn g" id="skipBtn">パス</button></div>`;
-    const say=()=>speak(e.ex);
+    const say=()=>speakEx(e);
     $('#repBtn').onclick=say;
     setTimeout(say,250);
     bindType(e, ()=>e.sf||e.head);
@@ -4114,7 +4146,7 @@ function renderQ(){
          <button class="btn g" id="clrBtn">↺ やり直す</button>
          <button class="btn g" id="skipBtn">パス</button>
        </div>`;
-    const say=()=>speak(e.ex);
+    const say=()=>speakEx(e);
     $('#repBtn').onclick=say; setTimeout(say,250);
 
     const mk=(o,where)=>{
@@ -4253,7 +4285,7 @@ function renderQ(){
     };
     paint();
     let micLabel = sup ? '🎙 タップして復唱' : '🎙 マイクが使えません';
-    const say=()=>{ speak(e.ex); if(sup) micGuard(()=>micLabel); };
+    const say=()=>{ speakEx(e); if(sup) micGuard(()=>micLabel); };
     $('#repBtn').onclick=say;
     setTimeout(say,250);
     $('#skipBtn').onclick=()=>{ srStop(); const r=Q.echo.filled.size/Q.echo.targets.length;
@@ -4330,7 +4362,7 @@ function renderQ(){
     const setNote=t=>{ $('#micNote').innerHTML=t; };
     const showHeard=txt=>{ $('#micState').innerHTML=`<div class="heard"><small>聞き取り結果</small>${esc(txt)}</div>`; };
     let micLabelS = sup ? '🎙 タップして話す' : '🎙 マイクが使えません';
-    $('#modelBtn').onclick=()=>{ Q.hintUsed=true; speak((e.head||'').replace(/\.\.\./g,' '));
+    $('#modelBtn').onclick=()=>{ Q.hintUsed=true; speakHead(e);
       if(sup) micGuard(()=>micLabelS); };
     $('#skipBtn').onclick=()=>{ srStop(); finish('ng',''); };
     if(!sup){
@@ -4907,8 +4939,8 @@ document.addEventListener('keydown',ev=>{
     if(idx>=0){ const b=$('#opts') && $('#opts').children[idx]; if(b) b.click(); } }
   if((ev.key==='s'||ev.key==='S') && !inInput){
     const it2=Q.items[Q.i];
-    if(it2.mode==='lsn') speak((it2.e.head||'').replace(/\.\.\./g,' '));
-    else if(it2.mode==='dict') speak(it2.e.ex);
+    if(it2.mode==='lsn') speakHead(it2.e);
+    else if(it2.mode==='dict') speakEx(it2.e);
     else speakEntry(it2.e, it2.mode);
   }
 });
@@ -5433,13 +5465,15 @@ $('#optGoogle').checked=C.googleOnly!==false;
 $('#optGoogle').onchange=e=>{ C.googleOnly=e.target.checked; save(); loadVoices();
   toast(C.googleOnly?'高品質な音声に絞りました':'すべての英語音声から選べます'); };
 if($('#voiceTest')) $('#voiceTest').onclick=()=>{
-  try{ speechSynthesis.cancel(); }catch(e){} audStop();
-  speak('The manager approved the new budget last week.'); };
+  const e=speakSample();
+  const el=$('#voiceSample');
+  if(el) el.innerHTML=`<b>${esc(e.head)}</b>　${esc(e.ex)}`;
+};
 $('#optSfx').checked=C.sfx; $('#optSfx').onchange=e=>{ C.sfx=e.target.checked; save(); if(C.sfx) sfx('ok'); };
 $('#optConfetti').checked=C.confetti; $('#optConfetti').onchange=e=>{ C.confetti=e.target.checked; save(); if(C.confetti) confetti(40); };
 $('#voiceSel').onchange=e=>{ C.voice=e.target.value; C.voicePicked=true; save(); audStop(); loadVoices(); };
 $('#rate').value=C.rate; $('#rate').oninput=e=>{ C.rate=+e.target.value; save(); };
-$('#testVoice').onclick=()=>speak('The quarterly report will be distributed at the meeting.');
+$('#testVoice').onclick=()=>speakSample();
 $('#dailyGoal').value=C.goal; $('#dailyGoal').oninput=e=>{ C.goal=Math.max(1,+e.target.value||30); save(); };
 $('#expBtn').onclick=()=>{ dl(new Blob([JSON.stringify(S)],{type:'application/json'}),'toeic_vocab_record_'+todayKey()+'.json');
   toast('学習記録を書き出しました'); };
