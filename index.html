@@ -80,6 +80,24 @@ main{max-width:1180px;margin:0 auto;padding:22px 16px 110px}
 .view{display:none}.view.on{display:block;animation:slideUp .3s both}
 /* ================= surfaces ================= */
 .card{background:var(--panel);border:var(--bw) solid var(--edge);border-radius:var(--r);padding:20px;box-shadow:var(--hs);margin-bottom:18px}
+details.fold{border:2px solid var(--edge);border-radius:14px;background:var(--panel)}
+details.card.fold{padding:0}
+details.fold>summary{list-style:none;cursor:pointer;padding:14px 16px;font-weight:900;font-size:15px;
+  display:flex;align-items:center;gap:8px;border-radius:12px;user-select:none}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary::after{content:'▾';margin-left:auto;font-size:13px;opacity:.6;transition:transform .2s}
+details.fold[open]>summary::after{transform:rotate(180deg)}
+details.fold>summary:hover{background:var(--p1s)}
+details.fold>.foldbody{padding:2px 16px 16px}
+.manualbox{border:2px dashed var(--edge);border-radius:16px;padding:16px;background:var(--p4s);margin-top:6px}
+.mstep{display:flex;align-items:center;gap:9px;font-weight:900;margin:0 0 8px;font-size:15px;line-height:1.5}
+.mstep>span{flex:none;width:24px;height:24px;border-radius:50%;background:var(--edge);color:#fff;
+  display:grid;place-items:center;font-size:13px}
+.mailto{display:inline-block;margin-top:4px;font-family:monospace;font-size:14px;
+  background:#fff;border:2px solid var(--edge);border-radius:9px;padding:3px 9px}
+a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.mflag{display:inline-block;margin-left:5px;font-size:10px;font-weight:900;vertical-align:middle;
+  background:var(--p4s);border:1.5px solid var(--p4);color:#8a6100;border-radius:6px;padding:1px 4px}
 h2{font-size:21px;margin:0 0 4px;font-weight:900;letter-spacing:-.3px}
 h3{font-size:16px;margin:0 0 12px;font-weight:900;display:flex;align-items:center;gap:8px}
 .muted{color:var(--sub);font-size:13px}
@@ -366,7 +384,7 @@ body.student .logo{flex:1}
 .dropzone{border:2.5px dashed var(--line);border-radius:16px;padding:20px;text-align:center;color:var(--sub);
   font-weight:800;font-size:13.5px;transition:.15s}
 .dropzone.over{border-color:var(--p1);background:var(--p1s);color:var(--p1)}
-#tQr canvas,#exQr canvas{max-width:100%;height:auto;border:2px solid var(--edge);border-radius:12px;background:#fff}
+#tQr canvas{max-width:100%;height:auto;border:2px solid var(--edge);border-radius:12px;background:#fff}
 .gascode{display:none;background:var(--ink);color:#b8ffd9;font-family:ui-monospace,monospace;font-size:11.5px;
   border-radius:12px;padding:12px;overflow:auto;line-height:1.6;white-space:pre;margin-top:10px}
 @media print{ header.top,nav.tabs,.btn,.dropzone{display:none!important} #tQr canvas{border:0} }
@@ -5301,7 +5319,8 @@ window.addEventListener('beforeunload',()=>{ try{localStorage.setItem(KEY,JSON.s
    先生モード：語彙テストの作成・配布（QR）・成績集計
    ============================================================ */
 
-let ADMIN = false, PREVIEW = false, EXAM = null;      // EXAM: 受験中のテスト設定
+let ADMIN = false, PREVIEW = false, EXAM = null;
+   // 先生版だけ最初から管理者      // EXAM: 受験中のテスト設定
 
 /* ---------- 文字列 <-> URL 用エンコード ---------- */
 function b64u(str){
@@ -5426,27 +5445,35 @@ function examFinish(){
      ${hasGas ? `<button class="btn go" id="exSend">📤 先生にスコアを送信</button>
                  <div id="sendState" style="margin-top:12px"></div>
                  <div id="exBackup"></div>`
-              : `<div class="sendbox ng">この先生は自動送信を設定していません。下のコードかQR、ファイルを提出してください。</div>
+              : `<div class="sendbox ng">この先生は自動送信を設定していません。下の手順でコードを先生に送ってください。</div>
                  <div id="exManual"></div>`}
      ${(ADMIN||PREVIEW)?'<div class="row" style="margin-top:14px"><button class="btn g sm" id="exBackAdmin">👩‍🏫 管理者ビューに戻る</button></div>':''}`;
 
-  // --- 提出用のコード・QR・ファイル（必要になったときだけ作る）---
+  // --- 提出用コード（送信できなかったときだけ作る）---
   function buildManual(host){
+    const to=(cfg.mail||'').trim();
+    const subj=`【語彙テスト】${cfg.title}／${who.cls}／${who.sid}／${who.name}`;
+    const mail='mailto:'+encodeURIComponent(to)
+      +'?subject='+encodeURIComponent(subj)
+      +'&body='+encodeURIComponent('スコアを送信できなかったので、コードを送ります。\n\n'+code+'\n');
     host.innerHTML=
-      `<div id="exQr" style="text-align:center;margin:12px 0"></div>
-       <textarea id="exCode" readonly style="width:100%;height:82px;font-size:11px;font-family:monospace;
-         border:2px solid var(--edge);border-radius:12px;padding:9px"></textarea>
-       <div class="row" style="margin-top:10px">
-         <button class="btn g sm" id="exCopy">📋 コードをコピー</button>
-         <button class="btn g sm" id="exDl">📥 結果ファイルを保存</button>
-       </div>
-       <p class="muted" style="margin-top:10px">QRを先生に見せるか、コード／ファイルを提出してください。</p>`;
+      `<div class="manualbox">
+         <p class="mstep"><span>1</span>下のコードをコピーします</p>
+         <textarea id="exCode" readonly style="width:100%;height:82px;font-size:11px;font-family:monospace;
+           border:2px solid var(--edge);border-radius:12px;padding:9px"></textarea>
+         <div class="row" style="margin:10px 0 16px">
+           <button class="btn" id="exCopy">📋 コードをコピー</button>
+         </div>
+         <p class="mstep"><span>2</span>先生にメールで送ります${to?`<br><b class="mailto">${esc(to)}</b>`:''}</p>
+         <div class="row" style="margin-top:8px">
+           <a class="btn go" id="exMail" href="${mail}">✉️ メールを作成する</a>
+         </div>
+         <p class="muted" style="margin-top:12px">メールが開いたら、本文にコードが入っているか確認して送信してください。
+         うまく開かないときは、ふだん使っているメールやメッセージに<b>コードを貼り付けて</b>先生に送れば大丈夫です。</p>
+       </div>`;
     $('#exCode').value=code;
-    $('#exQr').appendChild(qrCanvas(code, 240));
     $('#exCopy').onclick=()=>{ $('#exCode').select();
       try{ navigator.clipboard.writeText(code); }catch(e){ document.execCommand('copy'); } toast('コードをコピーしました'); };
-    $('#exDl').onclick=()=>dl(new Blob([JSON.stringify(rec2)],{type:'application/json'}),
-      `result_${who.cls}_${who.sid}_${who.name}.json`.replace(/[\\/:*?"<>|]/g,'_'));
   }
   if(!hasGas) buildManual($('#exManual'));
 
@@ -5473,7 +5500,7 @@ function examFinish(){
           box.innerHTML=`<div class="sendbox ng">⚠️ 送信できませんでした（${tries}回目）。電波の良い場所でもう一度お試しください。</div>`;
           if(tries>=2 && !$('#exCode')){          // 2回失敗したら控えを出す
             const bk=$('#exBackup');
-            bk.innerHTML='<hr class="sep"><p class="sec-label">送れないときは、これを先生に提出してください</p><div id="exManual"></div>';
+            bk.innerHTML='<hr class="sep"><p class="sec-label">📮 送れないときは、コードを先生にメールで送ってください</p><div id="exManual"></div>';
             buildManual($('#exManual'));
           }
         });
