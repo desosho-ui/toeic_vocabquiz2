@@ -343,6 +343,14 @@ body.student .logo{flex:1}
 .exam-field{margin-bottom:12px}
 .exam-field label{display:block;font-size:12px;font-weight:900;color:var(--sub);margin-bottom:5px}
 .exam-field input,.exam-field select{width:100%;font-size:17px;padding:12px 13px}
+.qrinfo{background:var(--panel);border:2.5px solid var(--edge);border-radius:16px;padding:14px 16px;margin-bottom:14px;
+  font-size:13.5px;line-height:1.9;box-shadow:0 4px 0 var(--edge)}
+.qrinfo .k{display:inline-block;min-width:5.4em;font-weight:900;color:var(--sub);font-size:11.5px}
+.qrinfo b{font-weight:900}
+.qrinfo .ttl{font-size:17px;font-weight:900;margin-bottom:6px;display:block}
+.qrinfo .pv{font-family:Georgia,serif;font-size:13px;color:var(--sub)}
+.dirtybox{background:var(--p4s);border:2.5px dashed var(--p4);border-radius:14px;padding:12px 14px;margin-bottom:12px;
+  font-weight:800;font-size:13.5px;line-height:1.7}
 .sendbox{border-radius:12px;padding:11px 14px;font-weight:800;font-size:13.5px;margin-bottom:12px;border:2px solid var(--edge)}
 .sendbox.wait{background:var(--p6s)}
 .sendbox.ok{background:var(--p3s)}
@@ -888,7 +896,11 @@ body.student .logo{flex:1}
     <div class="card">
       <h3>📱 配布する（QRコード）</h3>
       <div id="tHostWarn" style="display:none"></div>
+      <div id="tDirty"></div>
+      <button class="btn go" id="tPublish" style="margin-bottom:14px">🔄 いま編集中のテストをQRに反映</button>
       <div id="tGasState" class="sendbox"></div>
+      <p class="sec-label">📋 このQRを読むと実施されるテスト</p>
+      <div id="tQrInfo" class="qrinfo"></div>
       <div id="tQr" style="text-align:center;margin-bottom:10px"></div>
       <p class="muted" id="tQrLen" style="text-align:center;margin:0 0 12px"></p>
       <textarea id="tUrl" readonly style="width:100%;height:70px;font-size:11px;font-family:monospace;
@@ -5438,7 +5450,7 @@ window.addEventListener('beforeunload',()=>{ try{localStorage.setItem(KEY,JSON.s
 /* ============================================================
    先生モード：語彙テストの作成・配布（QR）・成績集計
    ============================================================ */
-S.tea = S.tea || {pass:'', gas:'', tests:[], results:[], auto:true, lastPull:0};
+S.tea = S.tea || {pass:'', gas:'', tests:[], results:[], auto:true, lastPull:0, pub:null};
 const TEA = S.tea;
 let ADMIN = false, PREVIEW = false, EXAM = null;      // EXAM: 受験中のテスト設定
 
@@ -5768,6 +5780,37 @@ function gasAutoSet(on){
 
 /* ---------- 先生：画面 ---------- */
 let CUR=null;                                   // 編集中のテスト
+const deep = o => JSON.parse(JSON.stringify(o));
+const sameCfg = (a,b) => JSON.stringify(a)===JSON.stringify(b);
+/* QRに入っている内容を、URLから復元して表示する（表示と実物のズレを防ぐ） */
+function renderQrInfo(){
+  const pub=TEA.pub;
+  const box=$('#tQrInfo'); if(!box) return;
+  if(!pub){ box.innerHTML='<b>まだQRに反映されていません。</b>上のボタンを押してください。'; return; }
+  const url=testUrl(pub);
+  let cfg=null; try{ cfg=unpackCfg(url.split('#t=')[1]); }catch(e){}
+  if(!cfg){ box.innerHTML='<b>QRの内容を読み取れませんでした。</b>'; return; }
+  const cats=CATORDER.filter(c=>(cfg.cats||[]).includes(c)).map(c=>CATS[c].icon+CATS[c].name).join('・');
+  const pool=cfgPool(cfg).length;
+  const n=Math.min(cfg.count||0, pool);
+  const modes=(cfg.modes||[]).map(m=>MODE_SHORT[m]||m).join('・');
+  const o=cfg.opts||{};
+  const on=[]; if(o.mean!==false) on.push('意味'); if(o.ja!==false) on.push('和訳');
+  if(o.hint!==false) on.push('文字数ヒント'); if(o.initial) on.push('頭文字');
+  let pv='';
+  try{ pv=buildExamItems(cfg).slice(0,3).map(x=>x.e.head).join(' / '); }catch(e){}
+  box.innerHTML =
+    `<span class="ttl">${esc(cfg.title||'（無題）')}</span>` +
+    `<div><span class="k">クラス</span>${esc((cfg.classes||[]).join('・'))||'（未設定）'}</div>` +
+    `<div><span class="k">出題範囲</span>${esc(cats)} の #${cfg.start}–#${cfg.end}（対象 ${pool}語）</div>` +
+    `<div><span class="k">問題数</span><b>${n}問</b>${cfg.count>pool?`（${cfg.count}問の設定ですが対象が${pool}語）`:''}</div>` +
+    `<div><span class="k">出題形式</span><b>${esc(modes)}</b></div>` +
+    `<div><span class="k">制限時間</span>${cfg.limit?`1問 ${cfg.limit}秒`:'なし'}</div>` +
+    `<div><span class="k">表示</span>${on.join('・')||'なし'}</div>` +
+    `<div><span class="k">自動送信</span>${cfg.gas?'<b style="color:var(--p3)">ON</b>':'<b style="color:var(--p2)">OFF</b>'}</div>` +
+    (pv?`<div><span class="k">最初の3問</span><span class="pv">${esc(pv)}</span></div>`:'') +
+    `<div class="muted" style="margin-top:6px">反映日時：${new Date(pub.pubAt||pub.at||Date.now()).toLocaleString('ja-JP')}</div>`;
+}
 function renderTeach(){
   if(!ADMIN){ $('#teachLock').style.display='block'; $('#teachMain').style.display='none';
     $('#teachLockTitle').textContent = TEA.pass ? '🔒 合い言葉を入力' : '🔑 合い言葉を設定';
@@ -5803,16 +5846,27 @@ function renderTeach(){
   $('#tInfo').innerHTML=`対象 <b>${pool}</b>語 → 出題 <b>${Math.min(CUR.count||0,pool)}</b>問`
     + (pool<(CUR.count||0)?'（対象が少ないため全問出題）':'');
   // --- 配布 ---
-  const url=testUrl(CUR);
+  // --- QRは「反映済みの内容」から作る ---
+  if(!TEA.pub){ TEA.pub=deep(CUR); TEA.pub.pubAt=Date.now(); save(); }
+  const dirty = !sameCfg(Object.assign(deep(CUR),{pubAt:0}), Object.assign(deep(TEA.pub),{pubAt:0}));
+  const db=$('#tDirty');
+  db.innerHTML = dirty
+    ? '<div class="dirtybox">✏️ 編集中の内容は、まだこのQRに反映されていません。<br>下のボタンを押すとQRが更新されます。</div>' : '';
+  const pb=$('#tPublish');
+  pb.textContent = dirty ? '🔄 いま編集中のテストをQRに反映' : '✅ QRは最新です（もう一度反映する）';
+  pb.style.background = dirty ? '' : 'var(--p3)';
+  const url=testUrl(TEA.pub);
   $('#tUrl').value=url;
   const box=$('#tQr'); box.innerHTML=''; box.appendChild(qrCanvas(url, 300));
+  renderQrInfo();
   $('#tQrLen').textContent=`URLの長さ ${url.length} 文字`;
   const gs=$('#tGasState');
   if(gs){
-    gs.className = CUR.gas ? 'sendbox ok' : 'sendbox ng';
-    gs.innerHTML = CUR.gas
+    const g=(TEA.pub||{}).gas;
+    gs.className = g ? 'sendbox ok' : 'sendbox ng';
+    gs.innerHTML = g
       ? '☁️ 自動送信：<b>ON</b>　学生は解答後に「先生にスコアを送信」ボタンで提出できます'
-      : '⚠️ 自動送信：<b>OFF</b>　このQRでは学生が送信できません。下の「☁️ 自動集計」にURLを入れると、このQRにも反映されます';
+      : '⚠️ 自動送信：<b>OFF</b>　このQRでは学生が送信できません。「☁️ 自動集計」にURLを入れてから、もう一度QRに反映してください';
   }
   // file:// のままではQRを読んでも学生の端末では開けない
   const local = /^(file:|blob:)/.test(location.protocol) || location.hostname==='';
@@ -5884,8 +5938,16 @@ function teachBind(){
     if(el) el.onchange=()=>{ CUR.opts=CUR.opts||{}; CUR.opts[k]=el.checked; renderTeach(); }; });
   $('#tNew').onclick=()=>{ CUR=newTestCfg(); renderTeach(); toast('新しいテストを作成しました'); };
   $('#tSave').onclick=()=>{ const i=TEA.tests.findIndex(t=>t.id===CUR.id);
-    if(i>=0) TEA.tests[i]=JSON.parse(JSON.stringify(CUR)); else TEA.tests.push(JSON.parse(JSON.stringify(CUR)));
+    if(i>=0) TEA.tests[i]=deep(CUR); else TEA.tests.push(deep(CUR));
     save(); toast('テストを保存しました'); };
+  $('#tPublish').onclick=()=>{
+    const i=TEA.tests.findIndex(t=>t.id===CUR.id);
+    if(i>=0) TEA.tests[i]=deep(CUR); else TEA.tests.push(deep(CUR));
+    TEA.pub=deep(CUR); TEA.pub.pubAt=Date.now();
+    save(); renderTeach(); confetti(50);
+    toast('QRコードを更新しました');
+    const el=$('#tQrInfo'); if(el) scrollToEl(el,'center');
+  };
   $('#tReseed').onclick=()=>{ CUR.seed=(Math.random()*1e6)|0; renderTeach(); toast('出題内容を入れ替えました'); };
   // 配布
   $('#tCopy').onclick=()=>{ $('#tUrl').select();
@@ -5894,7 +5956,11 @@ function teachBind(){
   $('#tQrDl').onclick=()=>{ const cv=$('#tQr canvas'); if(!cv) return;
     cv.toBlob(b=>dl(b, `qr_${(CUR.title||'test').replace(/[\\/:*?"<>|]/g,'_')}.png`)); };
   $('#tPrint').onclick=()=>window.print();
-  $('#tPreview').onclick=()=>{ PREVIEW=true; showExamEntry(JSON.parse(JSON.stringify(CUR))); };
+  $('#tPreview').onclick=()=>{ PREVIEW=true;
+    const src = TEA.pub || CUR;
+    if(TEA.pub && !sameCfg(Object.assign(deep(CUR),{pubAt:0}),Object.assign(deep(TEA.pub),{pubAt:0})))
+      toast('QRに反映済みの内容で表示します');
+    showExamEntry(deep(src)); };
   // 結果取り込み
   $('#gImport').onclick=()=>{ const r=importCodes($('#gPaste').value);
     $('#gPaste').value=''; renderGrades();
