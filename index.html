@@ -3631,6 +3631,10 @@ function audCur(){                        // 「アプリの音声」が選ば�
   if(!m || !AUD) return null;
   return audList().find(v=>v.id===m[1]) || null;
 }
+/* 並べ替えのカード1枚を読み上げる形にする（「report,」→「report」） */
+function tokText(o){
+  return String((o&&o.t)||'').replace(/[^A-Za-z0-9'’\-]/g,'');
+}
 /* 「don't」→「don_t」。音声ファイル名にそろえる。 */
 function tokenSlug(w){
   return String(w||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
@@ -3663,6 +3667,34 @@ function audFind(text, id){
   }
   return null;
 }
+/* ---------- 音声ファイルの先読み ----------
+   タップしてから取りに行くと、電波の状況しだいで一拍おくれる。
+   問題を出した時点でまとめて取っておき、タップ時は端末の中から鳴らす。 */
+function audSrc(c){
+  return audBase()+(c.v.id?c.v.id+'/':'')+c.kind+'/'+c.id+'.'+(c.v.ext||AUD.ext||'mp3');
+}
+const AUDC=new Map();          // 元のURL → 手元に取り込んだURL
+const audcQ=[];                // 取り込んだ順（古いものから捨てる）
+const AUDC_MAX=300;
+function audUrl(c){ const u=audSrc(c); return AUDC.get(u)||u; }
+function audWarm(list){
+  if(!list||!('fetch' in window)) return;
+  list.filter(Boolean).forEach(c=>{
+    const u=audSrc(c);
+    if(AUDC.has(u)) return;
+    AUDC.set(u,u);                                   // 二重に取りにいかないための目印
+    fetch(u).then(r=>r.ok?r.blob():null).then(b=>{
+      if(!b||!b.size) return;
+      AUDC.set(u, URL.createObjectURL(b));
+      audcQ.push(u);
+      while(audcQ.length>AUDC_MAX){                  // 増えすぎないように古いものを解放
+        const old=audcQ.shift(), v=AUDC.get(old);
+        if(v&&v.indexOf('blob:')===0) URL.revokeObjectURL(v);
+        AUDC.delete(old);
+      }
+    }).catch(()=>{ AUDC.delete(u); });
+  });
+}
 function audPlaySeq(list, opt){
   opt=opt||{};
   audStop();
@@ -3673,7 +3705,7 @@ function audPlaySeq(list, opt){
   const step=()=>{
     if(i>=list.length){ if(opt.onDone) opt.onDone(); return; }
     const c=list[i++];
-    audEl.src=audBase()+(c.v.id?c.v.id+'/':'')+c.kind+'/'+c.id+'.'+(c.v.ext||AUD.ext||'mp3');
+    audEl.src=audUrl(c);
     // 音声ファイルは作った時点の速さが入っているので、その分を割り戻す
     const baked=+((AUD&&AUD.rate)||1) || 1;
     const want=+opt.rate || +C.rate || 1;
@@ -3694,16 +3726,45 @@ function speakSeq(parts, id){
   }
   ttsSeq(list);
 }
+/* 端末の読み上げ。
+   iPhone は cancel() と同じ瞬間に speak() すると、その発話を落としてしまう。
+   並べ替え問題で例文の途中に単語をタップすると、これで無音になっていた。
+   鳴っているときだけ止めて、少し間をあけてから話しかける。 */
+let ttsTok=0, ttsTimer=null;
 function ttsSeq(parts){
   if(!('speechSynthesis' in window)) return;
+  const list=(parts||[]).filter(t=>String(t==null?'':t).trim()!=='');
+  if(!list.length) return;
+  const my=++ttsTok;
+  clearTimeout(ttsTimer); ttsTimer=null;
+  let started=false;
+  const go=(retry)=>{
+    if(my!==ttsTok) return;                       // もっと新しいタップが来ていたらやめる
+    try{
+      if(!VOICES.length) loadVoices();
+      list.forEach((t,i)=>{
+        const u=utter(t, i===0 && list.length>1 ? Math.max(.6,(+C.rate||.95)-0.1) : null);
+        if(i===0) u.onstart=()=>{ started=true; };
+        speechSynthesis.speak(u);
+        if(i===0 && list.length>1) speechSynthesis.speak(utter(' ', 1)); // 語と例文のあいだに区切り
+      });
+      // まれに止まったまま返ってこないので、少しあとで起こす
+      setTimeout(()=>{ try{ if(speechSynthesis.paused) speechSynthesis.resume(); }catch(e){} }, 150);
+      // それでも鳴らなかったときは、一度だけ言い直す（iPhone で時々起きる）
+      if(!retry) setTimeout(()=>{
+        if(my!==ttsTok || started) return;
+        try{ if(speechSynthesis.speaking||speechSynthesis.pending) return;
+             speechSynthesis.cancel(); }catch(e){}
+        go(1);
+      }, 350);
+    }catch(e){}
+  };
   try{
-    speechSynthesis.cancel();
-    if(!VOICES.length) loadVoices();
-    parts.filter(Boolean).forEach((t,i)=>{
-      speechSynthesis.speak(utter(t, i===0 && parts.length>1 ? Math.max(.6,(+C.rate||.95)-0.1) : null));
-      if(i===0 && parts.length>1) speechSynthesis.speak(utter(' ', 1));   // 語と例文のあいだに区切り
-    });
-  }catch(e){}
+    if(speechSynthesis.speaking || speechSynthesis.pending){
+      speechSynthesis.cancel();
+      ttsTimer=setTimeout(()=>go(), 60);
+    } else go();
+  }catch(e){ go(); }
 }
 const RATES=[
   {v:0.7,  name:'ゆっくり',      note:'ひとつひとつの音を確かめたいとき'},
@@ -4244,6 +4305,12 @@ function renderQ(){
     const say=()=>speakEx(e);
     $('#repBtn').onclick=say; setTimeout(say,250);
 
+    // カードの語を先に取り込んでおく（タップしてから取りに行くと一拍おくれる）
+    if(audCur()){
+      audWarm(Q.order.bank.concat(Q.order.slot).map(o=>audFind(tokText(o), e.id)));
+      audWarm([audFind(e.ex, e.id)]);
+    }
+
     const mk=(o,where)=>{
       const c=document.createElement('div');
       c.className='wchip'; c.textContent=o.t; c.dataset.i=o.i; c.draggable=false;
@@ -4269,7 +4336,7 @@ function renderQ(){
       if(idx==null||idx>O.slot.length) idx=O.slot.length;
       O.slot.splice(idx,0,o);
       paint(); buzz(8);
-      speak(o.t.replace(/[^A-Za-z'’\-]/g,''));      // 置いた語だけを発音
+      speak(tokText(o));                            // 置いた語だけを発音
     };
     const unplace=o=>{
       const O=Q.order, si=O.slot.findIndex(x=>x.i===o.i);
