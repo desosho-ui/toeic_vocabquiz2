@@ -5977,18 +5977,36 @@ function examBegin(){
   if(!nm){ toast('氏名を入力してください'); $('#exName').focus(); return; }
   if(!sid){ toast('学籍番号を入力してください'); $('#exSid').focus(); return; }
   const cfg=EXAM;
-  // テスト用に設定を一時適用
+  /* 受験中は、先生が決めた内容だけを使う。
+     学生が自分の端末でどう設定していても、そちらは見ない。
+     元の設定は預かっておき、終わったら必ず返す。 */
   const o=cfg.opts||{};
+  EXAM_SAVED = {};
+  EXAM_KEYS.forEach(k=>{ EXAM_SAVED[k]=C[k]; });
+  S.exs = EXAM_SAVED;                      // 途中でページを閉じても戻せるように控える
   C.initial=!!o.initial; C.mean=o.mean!==false; C.ja=o.ja!==false; C.hint=o.hint!==false;
+  C.speak=!!o.speak;                       // 解答後に英文を読み上げるか
+  C.rate=+cfg.rate || 1;                   // 読み上げの速さ
   C.limit=cfg.limit||0; C.retry=false; C.count=cfg.count||20;
   const items=buildExamItems(cfg);
   window.__examVoice = cfg.av || '';       // 受験中は先生の指定を使う
   startSession([], {items, exam:{cfg, seed:cfg.seed, who:{cls,name:nm,sid}}});
 }
+/* 受験中に上書きする設定。終わったら元に戻す。 */
+const EXAM_KEYS=['initial','mean','ja','hint','speak','rate','limit','retry','count'];
+let EXAM_SAVED=null;
+function examRestore(){
+  if(!EXAM_SAVED) return;
+  EXAM_KEYS.forEach(k=>{ if(EXAM_SAVED[k]!==undefined) C[k]=EXAM_SAVED[k]; });
+  EXAM_SAVED=null;
+  delete S.exs;
+  window.__examVoice='';
+  save();
+}
 function examFinish(){
   if(Q.__done) return;                       // 二重送信・二重集計を防ぐ
   Q.__done=true;
-  window.__examVoice='';                     // 学生自身の設定に戻す
+  examRestore();                             // 学生自身の設定に戻す
   $('#quizPlay').style.display='none';
   $('#quizEmpty').style.display='none';
   const ex=Q.exam, cfg=ex.cfg, who=ex.who;
@@ -6096,6 +6114,8 @@ function examFinish(){
 
 /* ---------- 起動 ---------- */
 function examBoot(){
+  // 受験の途中でページを閉じた場合、次に開いたときに自分の設定へ戻す
+  if(S.exs){ EXAM_SAVED=S.exs; examRestore(); }
   
   $('#exStart').onclick=examBegin;
   const m=/[#&]t=([^&]+)/.exec(location.hash||'');
