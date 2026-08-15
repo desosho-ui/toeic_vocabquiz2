@@ -3575,13 +3575,23 @@ const audBase = () => window.__audioBase
   ? window.__audioBase.replace(/\/?$/,'/') + 'audio/'
   : location.href.split(/[#?]/)[0].replace(/[^/]*$/,'') + 'audio/';
 const audNorm = s => String(s||'').toLowerCase().replace(/[^a-z0-9']+/g,' ').trim();
+/* ファイルを直接ひらいたとき（file://）の逃げ道。
+   ブラウザは file:// のページから手元のファイルを読むことを許していないので、
+   audio フォルダが同じ場所にあっても読めない。そのときは公開先から読む。 */
+const AUD_WEB='https://desosho-ui.github.io/toeic_vocabquiz2/';
 let audTried='';
+function audWeb(){
+  if(window.__audioBase || location.protocol!=='file:' || !AUD_WEB) return;
+  window.__audioBase=AUD_WEB;
+  audTried='';
+  audInit();
+}
 function audInit(){
   try{
     const base=audBase();
     if(audTried===base) return; audTried=base;
     fetch(base+'manifest.json').then(r=>r.ok?r.json():null).then(j=>{
-      if(!j || !j.v) return;
+      if(!j || !j.v){ audWeb(); return; }
       // v1（声が1種類だけ）も読めるようにしておく
       const vs = (j.v>=2 && j.voices) ? j.voices
                : [{id:'', name:j.voice||'内蔵音声', label:j.voice||'内蔵音声', w:j.w||[], s:j.s||[]}];
@@ -3604,13 +3614,14 @@ function audInit(){
       });
       loadVoices();                       // 音声の選択肢に足す
       if(window.__onAudio) try{ window.__onAudio(); }catch(e){}
-    }).catch(()=>{});
+    }).catch(()=>{ audWeb(); });
   }catch(e){}
 }
 let audEl=null, audShared=null, audTimer=null;
 function audPlaying(){ return !!(audEl && !audEl.paused && !audEl.ended); }
 function audStop(){
   clearTimeout(audTimer); audTimer=null;
+  audStopNode();
   if(audEl){ try{ audEl.onended=null; audEl.onerror=null; audEl.pause(); }catch(e){} }
 }
 function headText(e){
@@ -3676,7 +3687,43 @@ function audSrc(c){
 /* URL を取ってくるだけでは足りない。
    再生のたびに src を差し替えると、その場で読み込み直しが走って一拍おくれる。
    鳴らせる状態の <audio> ごと用意しておき、タップ時は play() を呼ぶだけにする。 */
-const AUDC=new Map();          // 元のURL → {url:手元のURL, el:用意ずみの<audio>}
+/* <audio> は、用意ずみでも play() から音が出るまでに一拍かかる。
+   端末の読み上げが速く感じるのは、この一拍が無いから。
+   そこで、短い単語だけは音を先に「ほどいて」おき、Web Audio で直接鳴らす。
+   こちらは待ち時間がほぼ無い。ほどけなかったものは <audio> にまわす。 */
+let ACTX=null, audSrcNode=null;
+function audCtx(){
+  if(ACTX!==null) return ACTX;
+  const AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC){ ACTX=false; return false; }
+  try{ ACTX=new AC(); }catch(e){ ACTX=false; }
+  return ACTX;
+}
+function audWake(){                     // 音は画面を触ったあとでないと出せない決まり
+  const c=audCtx();
+  if(c && c.state==='suspended'){ try{ c.resume(); }catch(e){} }
+}
+try{ document.addEventListener('pointerdown', audWake, {passive:true});
+     document.addEventListener('keydown', audWake); }catch(e){}
+function audStopNode(){
+  if(audSrcNode){ try{ audSrcNode.onended=null; audSrcNode.stop(); }catch(e){} audSrcNode=null; }
+}
+function audPlayBuf(c, rate, onDone){
+  const r=AUDC.get(audSrc(c)), ctx=ACTX;
+  if(!r || !r.buf || !ctx || ctx.state!=='running') return false;
+  try{
+    audStopNode();
+    const s=ctx.createBufferSource();
+    s.buffer=r.buf;
+    s.playbackRate.value=rate;
+    s.connect(ctx.destination);
+    s.onended=()=>{ if(audSrcNode===s) audSrcNode=null; if(onDone) onDone(); };
+    s.start(0);
+    audSrcNode=s;
+    return true;
+  }catch(e){ audSrcNode=null; return false; }
+}
+const AUDC=new Map();          // 元のURL → {url:手元のURL, el:用意ずみの<audio>, buf:ほどいた音}
 const audcQ=[];                // 用意した順（古いものから捨てる）
 const AUDC_MAX=60;
 function audUrl(c){ const r=AUDC.get(audSrc(c)); return (r&&r.url)||audSrc(c); }
@@ -3687,23 +3734,55 @@ function audDrop(u){
   try{ if(r.el){ r.el.pause(); r.el.removeAttribute('src'); r.el.load(); } }catch(e){}
   try{ if(r.url&&r.url.indexOf('blob:')===0) URL.revokeObjectURL(r.url); }catch(e){}
 }
+/* 取りにいく順番を守るための待ち行列。
+   いま出ている問題のカードを先に片づけ、そのあとで次の問題を先読みする。
+   同時に何本も走らせると、電波の細い所ではかえって全部が遅くなる。 */
+const audQ=[]; let audBusy=0; const AUD_PAR=4;
+function audPump(){
+  while(audBusy<AUD_PAR && audQ.length){
+    const u=audQ.shift();
+    if(!AUDC.has(u) || AUDC.get(u).el) continue;     // もう用意ずみ／取り消された
+    audBusy++;
+    fetch(u).then(r=>r.ok?r.arrayBuffer():null).then(ab=>{
+      if(!ab || !ab.byteLength || !AUDC.has(u)) return;
+      const url=URL.createObjectURL(new Blob([ab],{type:'audio/mpeg'}));
+      const el=new Audio();
+      el.preload='auto'; el.src=url;
+      try{ el.load(); }catch(e){}                    // ここで読み込みまで済ませておく
+      AUDC.set(u,{url, el, buf:null});
+      audcQ.push(u);
+      while(audcQ.length>AUDC_MAX) audDrop(audcQ.shift());
+      const ctx=audCtx();                            // 待たずに鳴らせる形にもしておく
+      if(ctx && ctx.decodeAudioData){
+        try{ ctx.decodeAudioData(ab.slice(0),
+               b=>{ const r=AUDC.get(u); if(r) r.buf=b; },
+               ()=>{}); }catch(e){}
+      }
+    }).catch(()=>{ AUDC.delete(u); })
+      .then(()=>{ audBusy--; audPump(); });
+  }
+}
 function audWarm(list){
   if(!list||!('fetch' in window)) return;
   list.filter(Boolean).forEach(c=>{
     const u=audSrc(c);
     if(AUDC.has(u)) return;
     AUDC.set(u,{url:u, el:null});                    // 二重に取りにいかないための目印
-    fetch(u).then(r=>r.ok?r.blob():null).then(b=>{
-      if(!b||!b.size || !AUDC.has(u)) return;
-      const url=URL.createObjectURL(b);
-      const el=new Audio();
-      el.preload='auto'; el.src=url;
-      try{ el.load(); }catch(e){}                    // ここで読み込みまで済ませておく
-      AUDC.set(u,{url, el});
-      audcQ.push(u);
-      while(audcQ.length>AUDC_MAX) audDrop(audcQ.shift());
-    }).catch(()=>{ AUDC.delete(u); });
+    audQ.push(u);
   });
+  audPump();
+}
+/* 先の問題ぶんも、いまのうちに取っておく。
+   出題された瞬間に取りはじめると、長い語ほど間に合わない。 */
+function audWarmAhead(from, n){
+  if(!audCur() || !Q || !Q.items) return;
+  for(let k=from, got=0; k<Q.items.length && got<n; k++){
+    const it=Q.items[k]; if(!it || !it.e) continue;
+    if(it.mode==='order'){
+      got++;
+      audWarm(it.e.ex.trim().split(/\s+/).map(t=>audFind(tokText({t}), it.e.id)));
+    }
+  }
 }
 function audPlaySeq(list, opt){
   opt=opt||{};
@@ -3714,6 +3793,11 @@ function audPlaySeq(list, opt){
   const step=()=>{
     if(i>=list.length){ if(opt.onDone) opt.onDone(); return; }
     const c=list[i++];
+    // 音を先にほどいてあれば、それを使う（いちばん待ちが少ない）
+    const baked0=+((AUD&&AUD.rate)||1) || 1;
+    const want0=+opt.rate || +C.rate || 1;
+    if(audPlayBuf(c, Math.min(2.5, Math.max(.5, want0/baked0)),
+                  ()=>{ audTimer=setTimeout(step, i<list.length?200:0); })) return;
     const pre=audReady(c);
     if(pre){
       audEl=pre;                                     // 用意ずみ。読み込み直しが起きない
@@ -4161,6 +4245,7 @@ function startSession(list,over){
   if(needMic) srSessionStart();
   $('#quizEmpty').style.display='none'; $('#quizResult').style.display='none'; $('#quizPlay').style.display='block';
   go('quiz'); renderQ();
+  audWarmAhead(0, 3);          // 最初の並べ替え問題ぶんは、始めた時点で取っておく
 }
 function pickMode(){ const s=mixSet(); return C.mode==='mix' ? s[RNG()*s.length|0] : C.mode; }
 function hintPattern(sf){ return sf.replace(/[A-Za-z]/g,'_').replace(/ /g,'\u2002/\u2002'); }
@@ -4323,7 +4408,10 @@ function renderQ(){
     $('#repBtn').onclick=say; setTimeout(say,250);
 
     // カードの語を先に鳴らせる状態にしておく（タップしてから取りに行くと一拍おくれる）
-    if(audCur()) audWarm(Q.order.bank.concat(Q.order.slot).map(o=>audFind(tokText(o), e.id)));
+    if(audCur()){
+      audWarm(Q.order.bank.concat(Q.order.slot).map(o=>audFind(tokText(o), e.id)));
+      audWarmAhead(Q.i+1, 2);           // 先の並べ替え問題も、いまのうちに
+    }
 
     const mk=(o,where)=>{
       const c=document.createElement('div');
