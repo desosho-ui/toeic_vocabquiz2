@@ -3585,10 +3585,13 @@ function audInit(){
       // v1（声が1種類だけ）も読めるようにしておく
       const vs = (j.v>=2 && j.voices) ? j.voices
                : [{id:'', name:j.voice||'内蔵音声', label:j.voice||'内蔵音声', w:j.w||[], s:j.s||[]}];
-      AUD={ ext:j.ext||'mp3', rate:+j.rate||1, voices: vs.map(v=>({
-        id:v.id||'', name:v.name||v.label||'', label:v.label||v.name||'',
-        ext:v.ext||j.ext||'mp3',            // 声ごとに形式が違うことがある
-        wSet:new Set(v.w||[]), sSet:new Set(v.s||[]) })) };
+      AUD={ ext:j.ext||'mp3', rate:+j.rate||1,
+        words:new Set(j.words||[]),         // 例文に出てくる単語（並べ替え問題用）
+        voices: vs.map(v=>({
+          id:v.id||'', name:v.name||v.label||'', label:v.label||v.name||'',
+          ext:v.ext||j.ext||'mp3',          // 声ごとに形式が違うことがある
+          hasWords: !!v.hasWords,
+          wSet:new Set(v.w||[]), sSet:new Set(v.s||[]) })) };
       TXT={w:{},s:{},byId:{}};
       DATA.forEach(e=>{
         TXT.byId[e.id]=e;
@@ -3626,6 +3629,10 @@ function audCur(){                        // 「アプリの音声」が選ば�
   if(!m || !AUD) return null;
   return audList().find(v=>v.id===m[1]) || null;
 }
+/* 「don't」→「don_t」。音声ファイル名にそろえる。 */
+function tokenSlug(w){
+  return String(w||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+}
 function audFind(text, id){
   const V=audCur(); if(!V || !TXT) return null;
   const k=audNorm(text);
@@ -3638,6 +3645,11 @@ function audFind(text, id){
   // ② 分からないときは文章から引く
   if(TXT.s[k]!==undefined && V.sSet.has(TXT.s[k])) return {kind:'s', id:TXT.s[k], t:text, v:V};
   if(TXT.w[k]!==undefined && V.wSet.has(TXT.w[k])) return {kind:'w', id:TXT.w[k], t:text, v:V};
+  // ③ 例文の中の1語（並べ替え問題でカードを置いたとき）
+  if(V.hasWords && AUD.words && !/\s/.test(k)){
+    const t=tokenSlug(text);
+    if(t && AUD.words.has(t)) return {kind:'t', id:t, t:text, v:V};
+  }
   return null;
 }
 function audPlaySeq(list, opt){
