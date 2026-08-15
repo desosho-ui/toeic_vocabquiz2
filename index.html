@@ -3740,7 +3740,8 @@ function audLead(buf){
 }
 function audPlayBuf(c, rate, onDone){
   const r=AUDC.get(audSrc(c)), ctx=ACTX;
-  if(!r || !r.buf || !ctx || ctx.state!=='running') return false;
+  if(!r || !r.buf || !ctx) return false;
+  if(ctx.state!=='running'){ audWake(); return false; }   // 一時停止から戻しておく
   try{
     audStopNode();
     const s=ctx.createBufferSource();
@@ -3756,12 +3757,36 @@ function audPlayBuf(c, rate, onDone){
 const AUDC=new Map();          // 元のURL → {url:手元のURL, el:用意ずみの<audio>, buf:ほどいた音}
 const audcQ=[];                // 用意した順（古いものから捨てる）
 const AUDC_MAX=90;
-const AUD_DECODE_MAX=24000;    // これより大きいものはほどかない（およそ5秒ぶん）
+/* iPhone では、Web Audio と <audio> を混ぜて使うと、<audio> のほうが
+   鳴らなくなることがある。端末の読み上げなら起きないのに、と見えるのはこれ。
+   だから例文も含めて、なるべく Web Audio 側にそろえる。
+   そのぶん場所を取るので、ほどいた音の合計に上限をつける。 */
+const AUD_DECODE_MAX=200000;   // これより大きいファイルはほどかない
+const AUD_BYTES_MAX=24*1024*1024;
+let audBytes=0;
+function bufBytes(b){
+  try{ return (b.length||0) * (b.numberOfChannels||1) * 4; }catch(e){ return 0; }
+}
+/* 数と、ほどいた音の量、どちらも上限を超えたら古いものから捨てる。
+   いま鳴っているものは残す。 */
+function audTrim(){
+  let guard=0;
+  while(audcQ.length && ++guard<500 &&
+        (audcQ.length>AUDC_MAX || audBytes>AUD_BYTES_MAX)){
+    const u=audcQ[0], r=AUDC.get(u);
+    if(r && (r.el===audEl || (audSrcNode && audSrcNode.buffer===r.buf))){
+      audcQ.push(audcQ.shift());                 // 鳴っている最中。後ろに回す
+      continue;
+    }
+    audDrop(audcQ.shift());
+  }
+}
 function audUrl(c){ const r=AUDC.get(audSrc(c)); return (r&&r.url)||audSrc(c); }
 function audReady(c){ const r=AUDC.get(audSrc(c)); return (r&&r.el)||null; }
 function audDrop(u){
   const r=AUDC.get(u); AUDC.delete(u);
   if(!r) return;
+  if(r.buf) audBytes=Math.max(0, audBytes-bufBytes(r.buf));
   try{ if(r.el){ r.el.pause(); r.el.removeAttribute('src'); r.el.load(); } }catch(e){}
   try{ if(r.url&&r.url.indexOf('blob:')===0) URL.revokeObjectURL(r.url); }catch(e){}
 }
@@ -3782,13 +3807,12 @@ function audPump(){
       try{ el.load(); }catch(e){}                    // ここで読み込みまで済ませておく
       AUDC.set(u,{url, el, buf:null});
       audcQ.push(u);
-      while(audcQ.length>AUDC_MAX) audDrop(audcQ.shift());
+      audTrim();
       const ctx=audCtx();                            // 待たずに鳴らせる形にもしておく
-      // 長いもの（例文など）はほどくと場所を取るので、そのままにしておく。
-      // 頭の間も短く、押してから鳴るまでの一拍も気になりにくい。
       if(ctx && ctx.decodeAudioData && ab.byteLength<=AUD_DECODE_MAX){
         try{ ctx.decodeAudioData(ab.slice(0),
-               b=>{ const r=AUDC.get(u); if(r){ r.buf=b; r.lead=audLead(b); } },
+               b=>{ const r=AUDC.get(u);
+                    if(r){ r.buf=b; r.lead=audLead(b); audBytes+=bufBytes(b); audTrim(); } },
                ()=>{}); }catch(e){}
       }
     }).catch(()=>{ AUDC.delete(u); })
@@ -3824,20 +3848,47 @@ function audWarmAhead(from, n){
     audWarmEntry(it.e, {ex:true, tokens: it.mode==='order'});
   }
 }
+let audSeqTok=0;
+const AUD_WAIT=7;              // 用意できるまで待つ回数（100ミリ秒ずつ）
 function audPlaySeq(list, opt){
   opt=opt||{};
   audStop();
+  const my=++audSeqTok;
   let i=0;
   const fail=()=>{ audStop();
     if(opt.onFail) opt.onFail(); else ttsSeq(list.map(c=>c.t)); };
+  // 音声ファイルは作った時点の速さが入っているので、その分を割り戻す
+  const baked=+((AUD&&AUD.rate)||1) || 1;
+  const want=+opt.rate || +C.rate || 1;
+  const rate=Math.min(2.5, Math.max(.5, want/baked));
+
   const step=()=>{
+    if(my!==audSeqTok) return;
     if(i>=list.length){ if(opt.onDone) opt.onDone(); return; }
     const c=list[i++];
-    // 音を先にほどいてあれば、それを使う（いちばん待ちが少ない）
-    const baked0=+((AUD&&AUD.rate)||1) || 1;
-    const want0=+opt.rate || +C.rate || 1;
-    if(audPlayBuf(c, Math.min(2.5, Math.max(.5, want0/baked0)),
-                  ()=>{ audTimer=setTimeout(step, i<list.length?200:0); })) return;
+    const after=()=>{ audTimer=setTimeout(step, i<list.length?200:0); };
+
+    if(audPlayBuf(c, rate, after)) return;          // ほどいてあれば、それがいちばん速い
+
+    /* まだほどけていない。Web Audio が使えるなら、少しだけ待って取りにいく。
+       iPhone では Web Audio と <audio> を混ぜると <audio> が鳴らないことがあるので、
+       できるだけ Web Audio 側で鳴らす。 */
+    if(audCtx()){
+      audWarm([c]);
+      let n=0;
+      const poll=()=>{
+        if(my!==audSeqTok) return;
+        if(audPlayBuf(c, rate, after)) return;
+        if(++n<AUD_WAIT){ audTimer=setTimeout(poll, 100); return; }
+        playEl(c, after);                            // 間に合わなければ従来どおり
+      };
+      audTimer=setTimeout(poll, 60);
+      return;
+    }
+    playEl(c, after);
+  };
+
+  const playEl=(c, after)=>{
     const pre=audReady(c);
     if(pre){
       audEl=pre;                                     // 用意ずみ。読み込み直しが起きない
@@ -3847,14 +3898,12 @@ function audPlaySeq(list, opt){
       audEl=audShared;
       audEl.src=audUrl(c);
     }
-    // 音声ファイルは作った時点の速さが入っているので、その分を割り戻す
-    const baked=+((AUD&&AUD.rate)||1) || 1;
-    const want=+opt.rate || +C.rate || 1;
-    audEl.playbackRate=Math.min(2.5, Math.max(.5, want/baked));
-    audEl.onended=()=>{ audTimer=setTimeout(step, i<list.length?200:0); };
+    audEl.playbackRate=rate;
+    audEl.onended=after;
     audEl.onerror=fail;
     const pr=audEl.play(); if(pr&&pr.catch) pr.catch(fail);
   };
+
   step();
 }
 function speakSeq(parts, id){
@@ -4482,7 +4531,9 @@ function renderQ(){
     };
     const unplace=o=>{
       const O=Q.order, si=O.slot.findIndex(x=>x.i===o.i);
-      if(si>=0){ O.slot.splice(si,1); O.bank.push(o); paint(); buzz(6); }
+      if(si<0) return;
+      // 取り消すときは読まない（並べるときだけ読む）
+      O.slot.splice(si,1); O.bank.push(o); paint(); buzz(6);
     };
     // ---- ポインタ操作でのドラッグ（マウス・タッチ共通）----
     function attachDrag(el,o){
