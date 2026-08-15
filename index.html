@@ -3587,6 +3587,8 @@ function audInit(){
                : [{id:'', name:j.voice||'内蔵音声', label:j.voice||'内蔵音声', w:j.w||[], s:j.s||[]}];
       AUD={ ext:j.ext||'mp3', rate:+j.rate||1,
         words:new Set(j.words||[]),         // 例文に出てくる単語（並べ替え問題用）
+        ja: j.ja ? { id:j.ja.id, label:j.ja.label||'', ext:j.ja.ext||j.ext||'mp3',
+          mSet:new Set(j.ja.m||[]), jSet:new Set(j.ja.j||[]), nSet:new Set(j.ja.n||[]) } : null,
         voices: vs.map(v=>({
           id:v.id||'', name:v.name||v.label||'', label:v.label||v.name||'',
           ext:v.ext||j.ext||'mp3',          // 声ごとに形式が違うことがある
@@ -3632,6 +3634,15 @@ function audCur(){                        // 「アプリの音声」が選ば�
 /* 「don't」→「don_t」。音声ファイル名にそろえる。 */
 function tokenSlug(w){
   return String(w||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+}
+/* 聞き流しの日本語部分（意味・和訳・番号）を探す */
+function audFindJa(key, id){
+  const J = AUD && AUD.ja; if(!J || id==null) return null;
+  const kind = key==='mean' ? 'm' : key==='ja' ? 'j' : key==='num' ? 'n' : '';
+  if(!kind) return null;
+  const set = kind==='m' ? J.mSet : kind==='j' ? J.jSet : J.nSet;
+  if(!set.has(id)) return null;
+  return { kind, id, t:'', v:{ id:J.id, ext:J.ext } };
 }
 function audFind(text, id){
   const V=audCur(); if(!V || !TXT) return null;
@@ -5378,10 +5389,20 @@ function abSpeakSeg(){
     AB.seg++;
     AB.timer=setTimeout(()=>{ if(my===AB.token) abSpeakSeg(); }, wait==null?A.gap:wait); };
 
-  // 英語の部分は、設定でアプリの音声を選んでいればそれを使う
   const e=AB.items[AB.i];
+  // 英語の部分は、設定でアプリの音声を選んでいればそれを使う
   if(!seg.ja && e && audCur()){
     const c=audFind(seg.t, e.id);
+    if(c){
+      audPlaySeq([c], { rate:+A.rate||.95,
+        onDone:()=>advance(),
+        onFail:()=>abTts(seg, my, advance) });
+      return;
+    }
+  }
+  // 日本語の部分（意味・和訳・番号）も、用意があればそれを使う
+  if(seg.ja && e){
+    const c=audFindJa(seg.key, e.id);
     if(c){
       audPlaySeq([c], { rate:+A.rate||.95,
         onDone:()=>advance(),
