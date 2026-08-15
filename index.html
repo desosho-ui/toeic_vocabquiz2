@@ -3708,6 +3708,23 @@ try{ document.addEventListener('pointerdown', audWake, {passive:true});
 function audStopNode(){
   if(audSrcNode){ try{ audSrcNode.onended=null; audSrcNode.stop(); }catch(e){} audSrcNode=null; }
 }
+/* 音声ファイルの頭には、話しはじめるまでの間が入っている。
+   長さはまちまちで、「conveniently」は 0.8秒 も黙っていた。
+   タップしてから読み上げが遅いと感じるのは、ほぼこれ。
+   どこから声が出ているかを調べて、そこまで飛ばして鳴らす。 */
+function audLead(buf){
+  try{
+    const d=buf.getChannelData(0), sr=buf.sampleRate;
+    const end=Math.min(d.length, sr*3);              // 頭の3秒だけ見れば足りる
+    for(let i=0;i<end;i++){
+      if(Math.abs(d[i])>0.008){
+        const t=i/sr-0.05;                           // 立ち上がりを削らないよう少し手前から
+        return Math.max(0, Math.min(t, buf.duration-0.15));
+      }
+    }
+  }catch(e){}
+  return 0;
+}
 function audPlayBuf(c, rate, onDone){
   const r=AUDC.get(audSrc(c)), ctx=ACTX;
   if(!r || !r.buf || !ctx || ctx.state!=='running') return false;
@@ -3718,7 +3735,7 @@ function audPlayBuf(c, rate, onDone){
     s.playbackRate.value=rate;
     s.connect(ctx.destination);
     s.onended=()=>{ if(audSrcNode===s) audSrcNode=null; if(onDone) onDone(); };
-    s.start(0);
+    s.start(0, r.lead||0);                           // 頭の間を飛ばす
     audSrcNode=s;
     return true;
   }catch(e){ audSrcNode=null; return false; }
@@ -3755,7 +3772,7 @@ function audPump(){
       const ctx=audCtx();                            // 待たずに鳴らせる形にもしておく
       if(ctx && ctx.decodeAudioData){
         try{ ctx.decodeAudioData(ab.slice(0),
-               b=>{ const r=AUDC.get(u); if(r) r.buf=b; },
+               b=>{ const r=AUDC.get(u); if(r){ r.buf=b; r.lead=audLead(b); } },
                ()=>{}); }catch(e){}
       }
     }).catch(()=>{ AUDC.delete(u); })
