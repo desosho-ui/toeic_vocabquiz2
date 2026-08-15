@@ -3607,7 +3607,7 @@ function audInit(){
     }).catch(()=>{});
   }catch(e){}
 }
-let audEl=null, audTimer=null;
+let audEl=null, audShared=null, audTimer=null;
 function audPlaying(){ return !!(audEl && !audEl.paused && !audEl.ended); }
 function audStop(){
   clearTimeout(audTimer); audTimer=null;
@@ -3673,39 +3673,56 @@ function audFind(text, id){
 function audSrc(c){
   return audBase()+(c.v.id?c.v.id+'/':'')+c.kind+'/'+c.id+'.'+(c.v.ext||AUD.ext||'mp3');
 }
-const AUDC=new Map();          // 元のURL → 手元に取り込んだURL
-const audcQ=[];                // 取り込んだ順（古いものから捨てる）
-const AUDC_MAX=300;
-function audUrl(c){ const u=audSrc(c); return AUDC.get(u)||u; }
+/* URL を取ってくるだけでは足りない。
+   再生のたびに src を差し替えると、その場で読み込み直しが走って一拍おくれる。
+   鳴らせる状態の <audio> ごと用意しておき、タップ時は play() を呼ぶだけにする。 */
+const AUDC=new Map();          // 元のURL → {url:手元のURL, el:用意ずみの<audio>}
+const audcQ=[];                // 用意した順（古いものから捨てる）
+const AUDC_MAX=60;
+function audUrl(c){ const r=AUDC.get(audSrc(c)); return (r&&r.url)||audSrc(c); }
+function audReady(c){ const r=AUDC.get(audSrc(c)); return (r&&r.el)||null; }
+function audDrop(u){
+  const r=AUDC.get(u); AUDC.delete(u);
+  if(!r) return;
+  try{ if(r.el){ r.el.pause(); r.el.removeAttribute('src'); r.el.load(); } }catch(e){}
+  try{ if(r.url&&r.url.indexOf('blob:')===0) URL.revokeObjectURL(r.url); }catch(e){}
+}
 function audWarm(list){
   if(!list||!('fetch' in window)) return;
   list.filter(Boolean).forEach(c=>{
     const u=audSrc(c);
     if(AUDC.has(u)) return;
-    AUDC.set(u,u);                                   // 二重に取りにいかないための目印
+    AUDC.set(u,{url:u, el:null});                    // 二重に取りにいかないための目印
     fetch(u).then(r=>r.ok?r.blob():null).then(b=>{
-      if(!b||!b.size) return;
-      AUDC.set(u, URL.createObjectURL(b));
+      if(!b||!b.size || !AUDC.has(u)) return;
+      const url=URL.createObjectURL(b);
+      const el=new Audio();
+      el.preload='auto'; el.src=url;
+      try{ el.load(); }catch(e){}                    // ここで読み込みまで済ませておく
+      AUDC.set(u,{url, el});
       audcQ.push(u);
-      while(audcQ.length>AUDC_MAX){                  // 増えすぎないように古いものを解放
-        const old=audcQ.shift(), v=AUDC.get(old);
-        if(v&&v.indexOf('blob:')===0) URL.revokeObjectURL(v);
-        AUDC.delete(old);
-      }
+      while(audcQ.length>AUDC_MAX) audDrop(audcQ.shift());
     }).catch(()=>{ AUDC.delete(u); });
   });
 }
 function audPlaySeq(list, opt){
   opt=opt||{};
   audStop();
-  if(!audEl){ audEl=new Audio(); audEl.preload='auto'; }
   let i=0;
   const fail=()=>{ audStop();
     if(opt.onFail) opt.onFail(); else ttsSeq(list.map(c=>c.t)); };
   const step=()=>{
     if(i>=list.length){ if(opt.onDone) opt.onDone(); return; }
     const c=list[i++];
-    audEl.src=audUrl(c);
+    const pre=audReady(c);
+    if(pre){
+      audEl=pre;                                     // 用意ずみ。読み込み直しが起きない
+      try{ audEl.currentTime=0; }catch(e){}
+    }else{
+      if(!audShared){ audShared=new Audio(); audShared.preload='auto'; }
+      audEl=audShared;
+      audEl.src=audUrl(c);
+    }
     // 音声ファイルは作った時点の速さが入っているので、その分を割り戻す
     const baked=+((AUD&&AUD.rate)||1) || 1;
     const want=+opt.rate || +C.rate || 1;
@@ -4305,11 +4322,8 @@ function renderQ(){
     const say=()=>speakEx(e);
     $('#repBtn').onclick=say; setTimeout(say,250);
 
-    // カードの語を先に取り込んでおく（タップしてから取りに行くと一拍おくれる）
-    if(audCur()){
-      audWarm(Q.order.bank.concat(Q.order.slot).map(o=>audFind(tokText(o), e.id)));
-      audWarm([audFind(e.ex, e.id)]);
-    }
+    // カードの語を先に鳴らせる状態にしておく（タップしてから取りに行くと一拍おくれる）
+    if(audCur()) audWarm(Q.order.bank.concat(Q.order.slot).map(o=>audFind(tokText(o), e.id)));
 
     const mk=(o,where)=>{
       const c=document.createElement('div');
@@ -4335,8 +4349,8 @@ function renderQ(){
       else { const si=O.slot.findIndex(x=>x.i===o.i); if(si>=0) O.slot.splice(si,1); }
       if(idx==null||idx>O.slot.length) idx=O.slot.length;
       O.slot.splice(idx,0,o);
+      speak(tokText(o));       // 先に鳴らす。並べ直しの描画を待たせない
       paint(); buzz(8);
-      speak(tokText(o));                            // 置いた語だけを発音
     };
     const unplace=o=>{
       const O=Q.order, si=O.slot.findIndex(x=>x.i===o.i);
