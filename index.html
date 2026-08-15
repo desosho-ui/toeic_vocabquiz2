@@ -5970,6 +5970,29 @@ function showExamEntry(cfg){
   (cfg.classes||[]).forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
   $('#examEntry').style.display='block'; $('#examDone').style.display='none';
   $('#exWho').innerHTML='';
+  examCheckClosed(cfg);
+}
+/* 締め切られていないか、始める前に確かめる。
+   通信できないときは止めない（受け取り側でも弾くので、そこで気づける）。 */
+function examCheckClosed(cfg){
+  const btn=$('#exStart'), head=$('#examHead');
+  if(!cfg.gas) return;
+  btn.disabled=true; btn.textContent='確認しています…';
+  gasClosed(cfg.gas, cfg.id).then(closed=>{
+    if(EXAM!==cfg) return;
+    if(closed){
+      btn.style.display='none';
+      $('#examEntry').innerHTML=
+        `<div class="exam-title">${esc(cfg.title||'語彙テスト')}</div>
+         <div class="sendbox ng" style="margin-top:14px">🔒 <b>このテストは締め切られています。</b><br>
+         受験できません。先生に確認してください。</div>`;
+    }else{
+      btn.disabled=false; btn.textContent='テストを開始する ▶';
+    }
+  }).catch(()=>{
+    if(EXAM!==cfg) return;
+    btn.disabled=false; btn.textContent='テストを開始する ▶';
+  });
 }
 function examBegin(){
   const cls=$('#exClass').value.trim(), nm=$('#exName').value.trim(), sid=$('#exSid').value.trim();
@@ -6080,7 +6103,16 @@ function examFinish(){
       box.innerHTML='<div class="sendbox wait">📡 先生に送信しています…</div>';
       fetch(cfg.gas,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
         body:JSON.stringify(rec2)})
-        .then(()=>{ sent=true;
+        .then(r=>r.json().catch(()=>({ok:true})))
+        .then(j=>{
+          if(j && j.ok===false && j.closed){
+            btn.disabled=true; btn.textContent='送信できません';
+            box.innerHTML='<div class="sendbox ng">🔒 <b>このテストは締め切られています。</b><br>'
+              +'スコアは受け付けられませんでした。先生に確認してください。</div>';
+            $('#exBackup').innerHTML='';
+            return;
+          }
+          sent=true;
           btn.disabled=true; btn.textContent='✅ 送信しました';
           btn.style.background='var(--p3)';
           box.innerHTML='<div class="sendbox ok">✅ 先生にスコアを送信しました。これで終了です。おつかれさまでした！</div>';
@@ -6105,6 +6137,20 @@ function examFinish(){
 }
 
 
+
+/* ---------- テストの締め切り ----------
+   QRのURLには問題の内容がそのまま入っているので、配ってしまうと取り消せない。
+   そこで「締切」だけをスプレッドシート側に置き、
+   ・受験を始める前に、締め切られていないか確かめる
+   ・締切後に届いたスコアは、受け取らない
+   の2段構えにする。QRを写真に撮って持ち帰られても、あとから提出はできない。 */
+async function gasClosed(gas, testId){
+  if(!gas || !testId) return false;
+  const url=gas+(gas.includes('?')?'&':'?')+'action=state&t='+encodeURIComponent(testId)+'&_='+Date.now();
+  const res=await fetch(url,{method:'GET'});
+  const j=await res.json();
+  return !!(j && j.closed);
+}
 
 
 
