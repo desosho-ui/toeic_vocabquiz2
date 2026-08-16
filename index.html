@@ -268,6 +268,14 @@ html[data-theme="dark"] .tag.c-func{color:var(--p4)}html[data-theme="dark"] .tag
 .audiobox{background:var(--p6s);border:2px dashed var(--p6);border-radius:16px;padding:18px 16px;text-align:center;margin-bottom:16px}
 .audiobox .ic{font-size:40px;line-height:1;display:block;margin-bottom:8px;animation:float 3s ease-in-out infinite}
 .audiobox .tip{font-size:12.5px;color:var(--sub);font-weight:700;margin-top:9px}
+.sndbox{background:var(--p6s);border:2px dashed var(--p6);border-radius:16px;padding:16px;text-align:center}
+.sndbox .tip{font-size:12.5px;color:var(--sub);font-weight:700;margin-top:9px}
+.sndhelp{background:#FFF4E0;border:2px solid #FFC53D;border-radius:14px;padding:14px 16px;
+  margin-top:12px;font-size:13.5px;line-height:1.85}
+.sndhelp b{color:#B45309}
+.sndhelp ol{margin:8px 0 0;padding-left:1.2em}
+.sndok{background:var(--p3s);border:2px solid var(--p3);border-radius:14px;padding:12px 16px;
+  margin-top:12px;font-size:13.5px;font-weight:800}
 .bigmean{font-size:27px;font-weight:900;line-height:1.35;margin:4px 0 6px}
 .micbtn{width:100%;padding:20px;font-size:19px;border-radius:18px}
 .micbtn.rec{background:var(--p2);animation:ring 1.2s ease-out infinite}
@@ -869,6 +877,19 @@ body.student .logo{flex:1}
     <div class="exam-field"><label>クラス</label><select id="exClass"></select></div>
     <div class="exam-field"><label>氏名</label><input type="text" id="exName" placeholder="山田 太郎" autocomplete="name"></div>
     <div class="exam-field"><label>学籍番号</label><input type="text" id="exSid" placeholder="2025001" inputmode="text"></div>
+    <div id="exSound" style="display:none">
+      <hr class="sep">
+      <p class="sec-label">🔊 音が出るか確かめてください</p>
+      <div class="sndbox">
+        <button class="btn" id="exSndPlay">▶ 音を鳴らす</button>
+        <div class="tip" id="exSndTip">押すと英文が読み上げられます。</div>
+      </div>
+      <div class="row" id="exSndAsk" style="display:none;margin-top:10px">
+        <button class="btn go sm" id="exSndOk">✅ 聞こえた</button>
+        <button class="btn g sm" id="exSndNg">🔇 聞こえない</button>
+      </div>
+      <div id="exSndHelp"></div>
+    </div>
     <p class="muted" style="margin:6px 0 14px">解答を始めると途中で戻れません。準備ができたら開始してください。</p>
     <button class="btn go" id="exStart">テストを開始する ▶</button>
     <div id="exWho"></div>
@@ -5970,7 +5991,54 @@ function showExamEntry(cfg){
   (cfg.classes||[]).forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
   $('#examEntry').style.display='block'; $('#examDone').style.display='none';
   $('#exWho').innerHTML='';
+  examSoundCheck(cfg);
   examCheckClosed(cfg);
+}
+/* 始める前に、音が出るか本人に確かめてもらう。
+   iPhone の消音スイッチはページ側から解除できず、鳴っているかを知る方法も無い。
+   本人に聞いてもらうのがいちばん確実。 */
+let SND_OK=false;
+function examSoundCheck(cfg){
+  const box=$('#exSound'); if(!box) return;
+  const on = (cfg.opts||{}).snd !== false;
+  SND_OK = !on;
+  box.style.display = on ? 'block' : 'none';
+  $('#exSndAsk').style.display='none';
+  $('#exSndHelp').innerHTML='';
+  $('#exSndTip').textContent='押すと英文が読み上げられます。';
+  $('#exSndPlay').disabled=false;
+  $('#exSndPlay').textContent='▶ 音を鳴らす';
+  if(!on) return;
+
+  const e=sampleEntry();
+  $('#exSndPlay').onclick=()=>{
+    $('#exSndPlay').textContent='🔊 再生中…';
+    $('#exSndTip').textContent='聞こえましたか？';
+    speakEntry(e,'recall');
+    $('#exSndAsk').style.display='flex';
+    setTimeout(()=>{ $('#exSndPlay').textContent='🔁 もう一度鳴らす'; }, 1200);
+  };
+  $('#exSndOk').onclick=()=>{
+    SND_OK=true;
+    $('#exSndHelp').innerHTML='<div class="sndok">✅ 確認できました。テストを開始できます。</div>';
+    $('#exSndAsk').style.display='none';
+    $('#exSndTip').textContent='音は出ています。';
+  };
+  $('#exSndNg').onclick=()=>{
+    audStop(); try{ speechSynthesis.cancel(); }catch(x){}
+    $('#exSndHelp').innerHTML=
+      `<div class="sndhelp"><b>音が出ないときは、次の順に確かめてください。</b>
+       <ol>
+         <li><b>iPhone</b>：本体の左側にある小さなスイッチを確認します。
+             <b>オレンジ色が見えていたら消音</b>です。反対側に倒してください。</li>
+         <li><b>Android</b>：音量ボタンを押し、出てきたつまみの
+             <b>「メディア」</b>を上げてください（着信音とは別です）。</li>
+         <li>音量ボタンで<b>音量を上げます</b>。</li>
+         <li>イヤホンやスピーカーにつながっていないか確認します。
+             つながっていると、そちらから鳴っています。</li>
+       </ol>
+       直したら、もう一度「🔁 もう一度鳴らす」を押してください。</div>`;
+  };
 }
 /* 締め切られていないか、始める前に確かめる。
    通信できないときは止めない（受け取り側でも弾くので、そこで気づける）。 */
@@ -5999,6 +6067,12 @@ function examBegin(){
   if(!cls){ toast('クラスを選んでください'); $('#exClass').focus(); return; }
   if(!nm){ toast('氏名を入力してください'); $('#exName').focus(); return; }
   if(!sid){ toast('学籍番号を入力してください'); $('#exSid').focus(); return; }
+  if(!SND_OK){
+    toast('先に音が出るか確かめてください');
+    $('#exSound').scrollIntoView({behavior:'smooth', block:'center'});
+    $('#exSndPlay').focus();
+    return;
+  }
   const cfg=EXAM;
   /* 受験中は、先生が決めた内容だけを使う。
      学生が自分の端末でどう設定していても、そちらは見ない。
