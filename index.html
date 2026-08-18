@@ -410,6 +410,27 @@ body.student .logo{flex:1}
 #tQr canvas{max-width:100%;height:auto;border:2px solid var(--edge);border-radius:12px;background:#fff}
 .gascode{display:none;background:var(--ink);color:#b8ffd9;font-family:ui-monospace,monospace;font-size:11.5px;
   border-radius:12px;padding:12px;overflow:auto;line-height:1.6;white-space:pre;margin-top:10px}
+/* ---------- カード（フラッシュカード） ---------- */
+.fcard{background:var(--p6s);border:var(--bw) solid var(--edge);border-radius:22px;
+  padding:34px 20px;text-align:center;cursor:pointer;user-select:none;
+  min-height:210px;display:flex;flex-direction:column;justify-content:center;gap:10px;
+  box-shadow:0 4px 0 var(--edge);transition:transform .12s}
+.fcard:active{transform:translateY(2px);box-shadow:0 2px 0 var(--edge)}
+.fcard.back{background:var(--panel);cursor:default;text-align:left;
+  padding:22px 20px;justify-content:flex-start}
+.fcard .fc-main{font-size:34px;font-weight:900;line-height:1.3;word-break:break-word}
+.fcard .fc-pos{font-size:13px;font-weight:800;color:var(--sub)}
+.fcard .fc-tap{font-size:12.5px;font-weight:800;color:var(--sub);margin-top:6px}
+.fcard .fc-mean{font-size:22px;font-weight:900;color:var(--p1);margin:2px 0 10px}
+.fcard .fc-ex{font-size:16px;line-height:1.75;font-weight:700}
+.fcard .fc-ja{font-size:13.5px;color:var(--sub);font-weight:700;margin-top:4px}
+.fcard .fc-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fcard .fc-hd b{font-size:26px}
+.fcrow{display:flex;gap:8px;margin-top:14px}
+.fcrow .btn{flex:1;padding:15px 6px;font-size:15px}
+.fcrow .btn small{display:block;font-size:10.5px;font-weight:800;opacity:.75;margin-top:2px}
+.fcdir{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;justify-content:center}
+.fchint{font-size:12.5px;color:var(--sub);font-weight:700;text-align:center;margin-top:10px}
 @media print{ header.top,nav.tabs,.btn,.dropzone{display:none!important} #tQr canvas{border:0} }
 .mask{position:fixed;inset:0;background:rgba(20,16,40,.55);backdrop-filter:blur(3px);z-index:120;
   display:none;align-items:center;justify-content:center;padding:16px}
@@ -633,6 +654,7 @@ body.student .logo{flex:1}
       <div class="mchip" data-m="spk" title="意味を見て英語を声に出して答える（マイクを使用）"><span class="ico">🎙</span>発音チェック</div>
       <div class="mchip" data-m="echo" title="読み上げられた例文をそのまま復唱する。正しく言えた語だけ空欄が埋まる"><span class="ico">🗣</span>復唱</div>
       <div class="mchip" data-m="order" title="読み上げを聞いて、単語カードを並べ替えて英文を作る"><span class="ico">🔀</span>並べ替え</div>
+      <div class="mchip" data-m="card" title="カードをめくって、思い出せたかを自分で申告する。1語2〜3秒で回せる"><span class="ico">🃏</span>カード</div>
       <div class="mchip" data-m="mix" title="音声系を除く5形式をランダムに混ぜて出題"><span class="ico">🎲</span>ミックス</div>
     </div>
 
@@ -4265,6 +4287,7 @@ function syncModeOpts(){
             : m==='lsn' ? '🎧 英語の音声だけを聞いて意味を4択で選びます。英文は解答するまで表示されません。'
             : m==='dict'? '✍️ 読み上げられた例文を聞いて、空欄に入る英語をタイプします。意味・和訳は伏せられます（💡で確認できます）。「空欄に頭文字を入れておく」をオンにすると、頭文字がヒントとして出ます。'
             : m==='spk' ? '🎙 日本語の意味と例文の和訳を見て、英語を声に出して答えます。「空欄に頭文字を入れておく」をオンにすると、頭文字がヒントとして出ます。'
+            : m==='card' ? '🃏 カードをめくって、思い出せたかを自分で申告します。入力も採点もないので1語2〜3秒で進みます。表に何を出すかは、始めてから切り替えられます。'
             : m==='order'? '🔀 読み上げを聞いて、単語カードを並べ替えて英文を作ります。カードを置くとその語だけ発音されます。'
             : m==='echo'? '🗣 読み上げられた例文をそのまま復唱します。正しく発音できた語だけ空欄が埋まります。「空欄に頭文字を入れておく」をオンにすると、各語の頭文字が薄く表示されます。'
             : recall    ? '🇯🇵 意味→英語では、どの文脈で使う語かを示すため「例文の和訳」を常に表示します。'
@@ -4317,7 +4340,11 @@ $('#limitRow').onclick=e=>{ const b=e.target.closest('.chip'); if(!b) return; C.
 [['optSpeak','speak'],['optHint','hint'],['optInitial','initial'],['optMean','mean'],['optJa','ja'],['optTypo','typo'],['optRetry','retry']]
   .forEach(([id,k])=>{ $('#'+id).onchange=e=>{ C[k]=e.target.checked; save(); }; });
 $('#startBtn').onclick=()=>startSession(rangeSel());
-$('#startDue').onclick=()=>startSession(DATA.filter(e=>{const r=recRO(e.id); return r&&r.s>0&&r.due&&r.due<=Date.now();}),{order:'srs'});
+/* 復習は語数が多くなりがちなので、既定でカードにする。
+   80語のタイピングは終わらないが、カードなら10分で回せる。 */
+$('#startDue').onclick=()=>startSession(
+  DATA.filter(e=>{const r=recRO(e.id); return r&&r.s>0&&r.due&&r.due<=Date.now();}),
+  {order:'srs', mode:'card'});
 $('#startWeak').onclick=()=>startSession(DATA.filter(e=>{const r=recRO(e.id); return r&&r.w>0;}),{order:'weak'});
 $('#startStar').onclick=()=>startSession(DATA.filter(e=>{const r=recRO(e.id); return r&&r.star;}),{order:'random'});
 
@@ -4345,7 +4372,7 @@ function startSession(list,over){
     const n = (C.count>0? Math.min(C.count,picked.length) : picked.length);
     picked = picked.slice(0,n);
     if(ord!=='random') picked=shuffle(picked);
-    items=picked.map(e=>({e,mode:pickMode()}));
+    items=picked.map(e=>({e, mode: over.mode || pickMode()}));
   }
   Q={ items, i:0, ok:0, ng:0, near:0, streak:0, best:0,
       t0:Date.now(), answered:false, wrongs:[], requeued:false, log:[], exam:over.exam||null };
@@ -4625,6 +4652,64 @@ function renderQ(){
       setTimeout(()=>{ [...$('#wslot').children].forEach(c=>c.classList.remove('ok','bad')); },1200);
     };
     $('#qKbd').innerHTML='';
+  } else if(it.mode==='card'){
+    /* 🃏 カード。表を見て思い出し、めくって答え合わせをして、自分で申告する。
+       ほかの形式と違って入力も判定もない。1語2〜3秒で回すためのもの。 */
+    const dir=cardDir();
+    const heads=headText(e);
+    const front = dir==='ja' ? `<div class="fc-main">${esc(e.mean)}</div>`
+                                 + (e.pos?`<div class="fc-pos">${esc(e.pos)}</div>`:'')
+                : dir==='lsn' ? `<div class="fc-main">🔊</div>
+                                 <div class="fc-pos">音を聞いて、意味を思い出そう</div>`
+                : `<div class="fc-main">${esc(heads)}</div>`
+                  + (e.pos?`<div class="fc-pos">${esc(e.pos)}</div>`:'');
+    body.innerHTML =
+      `<div class="fcdir" id="fcDir">`
+      + CARD_DIRS.map(d=>`<button class="chip sm${d.v===dir?' on':''}" data-d="${d.v}" title="${esc(d.tip)}">${d.name}</button>`).join('')
+      + `</div>
+         <div class="fcard" id="fcCard">
+           ${front}
+           <div class="fc-tap">タップして答えを見る</div>
+         </div>
+         <div class="fchint">思い出せたかどうかを、自分で決めます。<br>
+           わからなければ <b>もう一度</b> を押してください。すぐまた出てきます。</div>`;
+
+    const say=()=>{ if(dir==='ja') return; speakHead(e); };
+    if(dir!=='ja') setTimeout(say, 200);
+
+    $('#fcDir').onclick=ev=>{ const b=ev.target.closest('[data-d]'); if(!b) return;
+      C.cardDir=b.dataset.d; save(); renderQ(); };
+
+    const flip=()=>{
+      if(Q.answered || Q.__flipped) return;
+      Q.__flipped=true;
+      const c=$('#fcCard');
+      c.className='fcard back';
+      c.innerHTML =
+        `<div class="fc-hd"><b>${esc(heads)}</b>
+           ${e.pos?`<span class="fc-pos">${esc(e.pos)}</span>`:''}
+           <button class="spk" id="fcSpk" title="読み上げ">🔊</button></div>
+         <div class="fc-mean">${esc(e.mean)}</div>
+         <div class="fc-ex">${revealHTML(e,false)}</div>
+         ${C.ja&&e.ja?`<div class="fc-ja">${esc(e.ja)}</div>`:''}`;
+      $('#fcSpk').onclick=ev=>{ ev.stopPropagation(); speakEntry(e,'recall'); };
+      if(dir==='ja') speakHead(e);
+      const row=document.createElement('div');
+      row.className='fcrow';
+      row.innerHTML=
+        `<button class="btn g" id="fcAgain">もう一度<small>思い出せなかった</small></button>
+         <button class="btn" id="fcOk">できた<small>少し考えた</small></button>
+         <button class="btn go" id="fcEasy">楽勝<small>すぐ出てきた</small></button>`;
+      c.after(row);
+      $('#fcAgain').onclick=()=>gradeCard('ng',false);
+      $('#fcOk').onclick  =()=>gradeCard('ok',false);
+      $('#fcEasy').onclick=()=>gradeCard('ok',true);
+      $('#qKbd').innerHTML='<kbd>1</kbd> もう一度　<kbd>2</kbd> できた　<kbd>3</kbd> 楽勝';
+    };
+    $('#fcCard').onclick=flip;
+    Q.__flipped=false;
+    Q.__flip=flip;
+    $('#qKbd').innerHTML='<kbd>Space</kbd> でめくる　<kbd>S</kbd> もう一度聞く';
   } else if(it.mode==='echo'){
     // 🗣 例文を聞いて、そのまま復唱する
     const sup=srSupported();
@@ -5075,14 +5160,16 @@ function submitMC(chosen,opts,box){
 }
 /* --- SRS --- */
 const STEPS=[1,2,4,8,16,32,60,120];
-function updateSRS(e,res){
+function updateSRS(e,res,easy){
   if(Q && Q.exam) return;                       // テスト受験中は個人の学習記録に影響させない
   const r=rec(e.id); const now=Date.now();
   r.s++; r.l=now;
   r.h.push([now, res==='ok'?1:(res==='near'?0.5:0)]); if(r.h.length>20) r.h.shift();
   if(res==='ok'){
     r.c++; r.st++;
-    if(Q.hintUsed) r.ef=Math.max(1.6,r.ef-0.05); else r.ef=Math.min(3.0,r.ef+0.05);
+    // カードで「楽勝」を押したときは、次に出るまでの間隔を大きく伸ばす
+    if(easy) r.ef=Math.min(3.0,r.ef+0.15);
+    else if(Q.hintUsed) r.ef=Math.max(1.6,r.ef-0.05); else r.ef=Math.min(3.0,r.ef+0.05);
     const base=STEPS[Math.min(r.st-1,STEPS.length-1)];
     r.iv=Math.max(1,Math.round(base*(r.ef/2.5)));
   } else if(res==='near'){
@@ -5207,6 +5294,24 @@ function finish(res,given,timedOut){
   if(C.speak) speakEntry(e, Q.items[Q.i].mode);
   $('#qKbd').innerHTML='<kbd>Enter</kbd> 次へ　<kbd>S</kbd> 例文を読み上げ';
 }
+/* カードの自己申告。
+   ほかの形式のような「正解！」の画面は出さず、そのまま次のカードへ進む。
+   1語2〜3秒で回すのが目的なので、確認の1タップも入れない。 */
+function gradeCard(res, easy){
+  if(Q.answered) return;
+  Q.answered=true;
+  stopTimer(); srStop();
+  const e=Q.items[Q.i].e;
+  updateSRS(e, res, easy);
+  Q.log.push({id:e.id, res, secs:(Date.now()-Q.qT0)/1000});
+  if(res==='ok'){ Q.ok++; Q.streak++; Q.best=Math.max(Q.best,Q.streak); }
+  else { Q.ng++; Q.streak=0; Q.wrongs.push({e, given:'', res}); }
+  const gained = res==='ok' ? (easy?6:5) : 2;     // 自己申告なので、ふつうの正解より控えめ
+  Q.xp=(Q.xp||0)+gained; if(!Q.exam) addXP(gained);
+  $('#qOk').textContent='◯'+Q.ok; $('#qNg').textContent='✕'+Q.ng;
+  $('#qStreak').textContent='🔥'+Q.streak;
+  next();
+}
 function next(){
   stopTimer(); srStop();
   Q.i++;
@@ -5308,6 +5413,14 @@ document.addEventListener('keydown',ev=>{
   const inInput = ev.target.tagName==='INPUT';
   if(Q.answered && ev.key==='Enter' && !inInput){ ev.preventDefault(); next(); }
   const md = Q.items[Q.i] && Q.items[Q.i].mode;
+  if(md==='card' && !inInput){
+    if(!Q.__flipped && (ev.key===' '||ev.key==='Enter')){ ev.preventDefault(); Q.__flip && Q.__flip(); return; }
+    if(Q.__flipped && /^[1-3]$/.test(ev.key)){
+      ev.preventDefault();
+      ({'1':()=>gradeCard('ng',false),'2':()=>gradeCard('ok',false),'3':()=>gradeCard('ok',true)})[ev.key]();
+      return;
+    }
+  }
   if(!Q.answered && (md==='mc'||md==='en4'||md==='lsn')){
     let idx=-1;
     if(/^[1-4]$/.test(ev.key)) idx=+ev.key-1;
@@ -5443,13 +5556,21 @@ $('#lqDir').onclick=()=>{ LQ.dir*=-1; LQ.page=0; renderList(); };
 /* --- 「どんな条件で・どんな形式で」出題されるかを明示する --- */
 const MODE_LABEL={type:'⌨️ タイピング穴埋め', mc:'🔘 意味4択', en4:'📝 Part 5（英語4択）',
   recall:'🇯🇵 意味→英語', lsn:'🎧 リスニング（音声→意味4択）', dict:'✍️ ディクテーション',
-  spk:'🎙 発音チェック（マイク）', echo:'🗣 復唱（マイク）', order:'🔀 並べ替え', mix:'🎲 ミックス'};
+  spk:'🎙 発音チェック（マイク）', echo:'🗣 復唱（マイク）', order:'🔀 並べ替え',
+  card:'🃏 カード', mix:'🎲 ミックス'};
 const MODE_SHORT={type:'タイピング', mc:'意味4択', en4:'Part 5', recall:'意味→英語', lsn:'リスニング',
-  dict:'ディクテ', spk:'発音', echo:'復唱', order:'並べ替え'};
+  dict:'ディクテ', spk:'発音', echo:'復唱', order:'並べ替え', card:'カード'};
 const MIX_ALL=['type','mc','en4','recall','lsn','dict','spk','echo','order'];
 function mixSet(){ const s=C.mixSet||[]; const r=MIX_ALL.filter(m=>s.includes(m)); return r.length? r : ['type']; }
 function modeText(){ return C.mode==='mix'
   ? `🎲 ミックス（${mixSet().map(m=>MODE_SHORT[m]).join('・')}）` : (MODE_LABEL[C.mode]||C.mode); }
+/* カードの向き。表に何を出すか。 */
+const CARD_DIRS=[
+  {v:'en', name:'英 → 日', tip:'英語を見て意味を思い出す'},
+  {v:'ja', name:'日 → 英', tip:'意味を見て英語を思い出す'},
+  {v:'lsn', name:'音声 → 意味', tip:'音だけを聞いて意味を思い出す'}
+];
+function cardDir(){ const v=C.cardDir||'en'; return CARD_DIRS.some(d=>d.v===v)?v:'en'; }
 const ORDER_LABEL={random:'ランダム', srs:'復習期限が近い順', weak:'苦手な順',
   new:'未学習を優先', old:'久しぶりの順'};
 const FILTER_LABEL={star:'⭐ ★をつけた語', wrong:'😵 間違えたことがある語', due:'🔔 今日が復習日の語',
