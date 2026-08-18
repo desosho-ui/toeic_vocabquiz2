@@ -6136,8 +6136,14 @@ function buildExamItems(cfg){
 
 
 /* ---------- 学生：受験 ---------- */
+let EXAM_FORM='';                       // 入力画面のもとの見た目を控えておく
 function showExamEntry(cfg){
   EXAM=cfg;
+  /* 締切や提出ずみのときは中身を差し替えてしまうので、
+     入ってくるたびに、もとのフォームに戻してから組み立てる。 */
+  const box=$('#examEntry');
+  if(!EXAM_FORM) EXAM_FORM=box.innerHTML;
+  else if(box.innerHTML!==EXAM_FORM){ box.innerHTML=EXAM_FORM; $('#exStart').onclick=examBegin; }
   $$('.view').forEach(s=>s.classList.remove('on'));
   $('#v-exam').classList.add('on');
   const n=Math.min(cfg.count||20, cfgPool(cfg).length);
@@ -6156,8 +6162,30 @@ function showExamEntry(cfg){
        <div class="sndhelp" style="margin-top:14px">🚫 <b>このテストは提出ずみです。</b><br>
          ${esc(done.n||'')}（学籍番号 ${esc(done.sid||'')}）<br>
          ${done.at?new Date(done.at).toLocaleString('ja-JP'):''} に提出しました。</div>
-       <p class="muted" style="margin:12px 0 0">1つのテストは1回だけ受けられます。
+       <p class="muted" style="margin:12px 0 0" id="exDoneNote">1つのテストは1回だけ受けられます。
        もう一度受ける必要があるときは、先生に申し出てください。</p>`;
+    /* 先生が成績表からこの解答を消していたら、もう一度受けられるようにする。
+       先生の「解答を消去」はスプレッドシートの行も消すので、
+       そこに無ければ受け直してよい、と判断できる。 */
+    if(cfg.gas && done.sid){
+      const note=$('#exDoneNote');
+      if(note) note.textContent='先生が受け直しを許可していないか確認しています…';
+      gasSubmitted(cfg.gas, cfg.id, done.sid).then(has=>{
+        if(EXAM!==cfg) return;
+        if(has){
+          const n2=$('#exDoneNote');
+          if(n2) n2.textContent='1つのテストは1回だけ受けられます。もう一度受ける必要があるときは、先生に申し出てください。';
+          return;
+        }
+        examUnmarkDone(cfg, done.sid);      // 先生が消していた → 受け直せる
+        showExamEntry(cfg);
+        toast('先生が受け直しを許可しました。もう一度受けられます');
+      }).catch(()=>{
+        if(EXAM!==cfg) return;
+        const n2=$('#exDoneNote');
+        if(n2) n2.textContent='1つのテストは1回だけ受けられます。もう一度受ける必要があるときは、先生に申し出てください。';
+      });
+    }
     return;
   }
   const prog=examProgressFor(cfg);
@@ -6266,6 +6294,11 @@ function examDoneKey(cfg, who){ return (cfg&&cfg.id) + '::' + ((who&&who.sid)||'
 function examMarkDone(cfg, who){
   S.exd = S.exd || {};
   S.exd[examDoneKey(cfg, who)] = {n:(who&&who.name)||'', at:Date.now()};
+  save();
+}
+function examUnmarkDone(cfg, sid){
+  if(!S.exd) return;
+  delete S.exd[examDoneKey(cfg, {sid})];
   save();
 }
 function examDoneFor(cfg){
@@ -6511,6 +6544,17 @@ function examFinish(){
    ・受験を始める前に、締め切られていないか確かめる
    ・締切後に届いたスコアは、受け取らない
    の2段構えにする。QRを写真に撮って持ち帰られても、あとから提出はできない。 */
+/* この学籍番号の解答が、まだシートに残っているか。
+   残っていなければ先生が消したということなので、受け直してよい。 */
+async function gasSubmitted(gas, testId, sid){
+  if(!gas || !testId || !sid) return true;      // 確かめられないときは受け直させない
+  const url=gas+(gas.includes('?')?'&':'?')+'action=state&t='+encodeURIComponent(testId)
+    +'&s='+encodeURIComponent(sid)+'&_='+Date.now();
+  const res=await fetch(url,{method:'GET'});
+  const j=await res.json();
+  if(!j || j.has===undefined) throw new Error('old');   // 古いApps Scriptのときは何もしない
+  return !!j.has;
+}
 async function gasClosed(gas, testId){
   if(!gas || !testId) return false;
   const url=gas+(gas.includes('?')?'&':'?')+'action=state&t='+encodeURIComponent(testId)+'&_='+Date.now();
