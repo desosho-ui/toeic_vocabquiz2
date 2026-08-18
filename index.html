@@ -6188,6 +6188,11 @@ function showExamEntry(cfg){
     }
     return;
   }
+  const fin=examFinishedFor(cfg);
+  if(fin){                                   // 解き終わっていて、まだ送信していない
+    examShowDone(cfg, fin.who, fin.rec);
+    return;
+  }
   const prog=examProgressFor(cfg);
   if(prog){
     const n=Math.min(prog.log.length, Math.min(cfg.count||20, cfgPool(cfg).length));
@@ -6294,6 +6299,7 @@ function examDoneKey(cfg, who){ return (cfg&&cfg.id) + '::' + ((who&&who.sid)||'
 function examMarkDone(cfg, who){
   S.exd = S.exd || {};
   S.exd[examDoneKey(cfg, who)] = {n:(who&&who.name)||'', at:Date.now()};
+  delete S.exf;                      // 提出まで終わったので、結果の控えは要らない
   save();
 }
 function examUnmarkDone(cfg, sid){
@@ -6419,8 +6425,6 @@ function examFinish(){
   examTotalStop();
   examClearProgress();                       // 途中経過はもう要らない
   examRestore();                             // 学生自身の設定に戻す
-  $('#quizPlay').style.display='none';
-  $('#quizEmpty').style.display='none';
   const ex=Q.exam, cfg=ex.cfg, who=ex.who;
   const total=Q.log.length, ok=Q.log.filter(x=>x.res==='ok').length;
   const near=Q.log.filter(x=>x.res==='near').length;
@@ -6430,8 +6434,25 @@ function examFinish(){
     q:total, o:ok, e:near, r:rate, sec, at:Date.now(),
     bk:Q.brk||0, aw:Math.round((Q.away||0)/1000),        // 中断回数 / 離席の秒数
     d:Q.log.map((x,i)=>[Q.items[i]?Q.items[i].e.id:0, x.res==='ok'?1:(x.res==='near'?2:0)])};
-  const code=b64u(JSON.stringify(rec2));
+  /* 解き終わった結果を残しておく。
+     「おつかれさまでした」の画面でリフレッシュされても、
+     テストが最初からになるのではなく、この結果画面に戻ってくる。 */
+  S.exf={t:cfg.id, who, rec:rec2, at:Date.now()};
+  save();
   
+  examShowDone(cfg, who, rec2);
+}
+/* 解き終わっていて、まだ送信していない結果 */
+function examFinishedFor(cfg){
+  const f=S.exf;
+  return (f && cfg && f.t===cfg.id && f.rec && f.who) ? f : null;
+}
+function examShowDone(cfg, who, rec2){
+  EXAM=cfg;
+  $('#quizPlay').style.display='none';
+  $('#quizEmpty').style.display='none';
+  const total=rec2.q||0, ok=rec2.o||0, sec=rec2.sec||0, rate=rec2.r||0;
+  const code=b64u(JSON.stringify(rec2));
   $$('.view').forEach(s=>s.classList.remove('on'));
   $('#v-exam').classList.add('on');
   $('#examEntry').style.display='none';
