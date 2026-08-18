@@ -102,6 +102,8 @@ details.fold>.foldbody{padding:2px 16px 16px}
 a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 .mflag{display:inline-block;margin-left:5px;font-size:10px;font-weight:900;vertical-align:middle;
   background:var(--p4s);border:1.5px solid var(--p4);color:#8a6100;border-radius:6px;padding:1px 4px}
+.mflag.brk{background:#FFE9E9;border-color:#F97066;color:#B42318}
+.mflag.dup{background:#FFE0E0;color:#B42318;border-color:#F97066}
 h2{font-size:21px;margin:0 0 4px;font-weight:900;letter-spacing:-.3px}
 h3{font-size:16px;margin:0 0 12px;font-weight:900;display:flex;align-items:center;gap:8px}
 .muted{color:var(--sub);font-size:13px}
@@ -268,6 +270,12 @@ html[data-theme="dark"] .tag.c-func{color:var(--p4)}html[data-theme="dark"] .tag
 .audiobox{background:var(--p6s);border:2px dashed var(--p6);border-radius:16px;padding:18px 16px;text-align:center;margin-bottom:16px}
 .audiobox .ic{font-size:40px;line-height:1;display:block;margin-bottom:8px;animation:float 3s ease-in-out infinite}
 .audiobox .tip{font-size:12.5px;color:var(--sub);font-weight:700;margin-top:9px}
+.totbar{display:flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--p4s);border:2px solid var(--p4);border-radius:12px;
+  padding:7px 12px;margin-bottom:10px;font-weight:900;font-size:13.5px}
+.totbar.warn{background:#FFF4E0;border-color:#FFC53D;color:#B45309}
+.totbar.danger{background:#FFE9E9;border-color:#F97066;color:#B42318;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
 .sndbox{background:var(--p6s);border:2px dashed var(--p6);border-radius:16px;padding:16px;text-align:center}
 .sndbox .tip{font-size:12.5px;color:var(--sub);font-weight:700;margin-top:9px}
 .sndhelp{background:#FFF4E0;border:2px solid #FFC53D;border-radius:14px;padding:14px 16px;
@@ -728,6 +736,7 @@ body.student .logo{flex:1}
       <button class="icon-btn" id="quitBtn" title="やめる">✕</button>
     </div>
     <div class="tbar" id="tBar" style="display:none"><i></i></div>
+    <div class="totbar" id="exTotal" style="display:none"></div>
     <div class="card">
       <div class="qmeta" id="qMeta"></div>
       <div id="qBody"></div>
@@ -4411,7 +4420,12 @@ function startTimer(){
   bar.style.display='block'; pill.style.display='inline-block';
   bar.classList.remove('warn','danger'); pill.classList.remove('danger');
   const total=C.limit*1000;
-  Q.total=total; Q.deadline=Date.now()+total;
+  Q.total=total;
+  /* この問題を最初に表示した時刻から数える。
+     途中でリフレッシュしても、その分の時間はもう減っている。 */
+  const started=Q.qT0||Date.now();
+  Q.deadline=started+total;
+  if(Q.deadline<=Date.now()+300) Q.deadline=Date.now()+300;   // 開いた瞬間に0秒は酷なので最低0.3秒
   const tick=()=>{
     if(Q.answered){ stopTimer(); return; }
     const left=Math.max(0, Q.deadline-Date.now());
@@ -4436,7 +4450,19 @@ function timeUp(){
 }
 /* タブを離れている間は時間を止める（不利にならないように） */
 document.addEventListener('visibilitychange',()=>{
-  if(!Q || !C.limit || Q.answered || !$('#v-quiz').classList.contains('on')) return;
+  if(!Q || Q.answered || !$('#v-quiz').classList.contains('on')) return;
+  if(Q.exam){
+    /* 先生のテスト中は時計を止めない。離れていた時間も記録する。 */
+    if(document.hidden){ Q.__hid=Date.now(); }
+    else if(Q.__hid){
+      Q.away=(Q.away||0)+(Date.now()-Q.__hid);
+      if(Date.now()-Q.__hid>15000) Q.brk=(Q.brk||0)+1;    // 15秒以上離れたら中断1回
+      Q.__hid=0;
+      if(typeof examSaveProgress==='function') examSaveProgress();
+    }
+    return;
+  }
+  if(!C.limit) return;
   if(document.hidden){ if(Q.tid){ clearInterval(Q.tid); Q.tid=null; } Q.rest=Math.max(0,Q.deadline-Date.now()); }
   else if(Q.rest!=null){ Q.deadline=Date.now()+Q.rest; Q.rest=null; startTimerResume(); }
 });
@@ -4449,7 +4475,10 @@ function startTimerResume(){
 }
 
 function renderQ(){
-  const it=Q.items[Q.i], e=it.e; Q.answered=false; Q.hintUsed=false; Q.qT0=Date.now();
+  const it=Q.items[Q.i], e=it.e; Q.answered=false; Q.hintUsed=false;
+  Q.qT0 = Q.__resumeQT0 || Date.now();     // 再開のときは、前に表示した時刻をそのまま使う
+  Q.__resumeQT0 = 0;
+  if(Q.exam && typeof examSaveProgress==='function') examSaveProgress();
   if(Q.exam) setSeed((Q.exam.seed||1)*7919 + Q.i);   // 受験者全員に同じ選択肢を出す
   $('#qNo').textContent=`${Q.i+1} / ${Q.items.length}`;
   $('#qProg').style.width=(Q.i/Q.items.length*100)+'%';
@@ -6115,11 +6144,22 @@ function showExamEntry(cfg){
   const modes=(cfg.modes||['type']).map(m=>MODE_SHORT[m]||m).join('・');
   $('#examHead').innerHTML=
     `<div class="exam-title">${esc(cfg.title||'語彙テスト')}</div>
-     <div class="muted">全 ${n} 問 ／ 形式：${esc(modes)} ／ ${cfg.limit?`1問 ${cfg.limit}秒`:'制限時間なし'}</div>`;
+     <div class="muted">全 ${n} 問 ／ 形式：${esc(modes)} ／ ${cfg.limit?`1問 ${cfg.limit}秒`:'制限時間なし'}${cfg.total?` ／ 全体 ${cfg.total}分`:''}</div>`;
   const sel=$('#exClass'); sel.innerHTML='<option value="">選んでください</option>';
   (cfg.classes||[]).forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
   $('#examEntry').style.display='block'; $('#examDone').style.display='none';
   $('#exWho').innerHTML='';
+  const done=examDoneFor(cfg);
+  if(done){
+    $('#examEntry').innerHTML =
+      `<div class="exam-title">${esc(cfg.title||'語彙テスト')}</div>
+       <div class="sndhelp" style="margin-top:14px">🚫 <b>このテストは提出ずみです。</b><br>
+         ${esc(done.n||'')}（学籍番号 ${esc(done.sid||'')}）<br>
+         ${done.at?new Date(done.at).toLocaleString('ja-JP'):''} に提出しました。</div>
+       <p class="muted" style="margin:12px 0 0">1つのテストは1回だけ受けられます。
+       もう一度受ける必要があるときは、先生に申し出てください。</p>`;
+    return;
+  }
   const prog=examProgressFor(cfg);
   if(prog){
     const n=Math.min(prog.log.length, Math.min(cfg.count||20, cfgPool(cfg).length));
@@ -6213,10 +6253,26 @@ function examSaveProgress(){
   if(!Q || !Q.exam || Q.__done) return;
   S.exr={ t:Q.exam.cfg.id, who:Q.exam.who, log:Q.log,
           ok:Q.ok, ng:Q.ng, near:Q.near, best:Q.best, xp:Q.xp||0,
-          t0:Q.t0, at:Date.now() };
+          t0:Q.t0, at:Date.now(),
+          brk:Q.brk||0, away:Q.away||0,      // 中断の回数と、離れていた時間
+          qT0:Q.qT0 };                       // いま出している問題を表示した時刻
   save();
 }
 function examClearProgress(){ if(S.exr){ delete S.exr; save(); } }
+/* 提出ずみの記録。
+   1つのテストは1回だけ。解き直してから断られるのは気の毒なので、
+   受験画面に入る前に止める。（本当の関門はスプレッドシート側） */
+function examDoneKey(cfg, who){ return (cfg&&cfg.id) + '::' + ((who&&who.sid)||''); }
+function examMarkDone(cfg, who){
+  S.exd = S.exd || {};
+  S.exd[examDoneKey(cfg, who)] = {n:(who&&who.name)||'', at:Date.now()};
+  save();
+}
+function examDoneFor(cfg){
+  const m=S.exd||{}; const p=(cfg&&cfg.id)+'::';
+  const k=Object.keys(m).find(x=>x.indexOf(p)===0);
+  return k ? Object.assign({sid:k.slice(p.length)}, m[k]) : null;
+}
 function examProgressFor(cfg){
   const p=S.exr;
   return (p && cfg && p.t===cfg.id && Array.isArray(p.log)) ? p : null;
@@ -6237,10 +6293,17 @@ function examResume(cfg){
   Q.log=p.log.slice(0, items.length);
   Q.ok=p.ok||0; Q.ng=p.ng||0; Q.near=p.near||0; Q.best=p.best||0; Q.xp=p.xp||0;
   Q.streak=0; Q.t0=p.t0||Date.now();
+  /* 離れていた時間を数える。ページを閉じた瞬間ではなく、
+     最後に1問答えた時刻からの経過をそのまま足す。
+     調べものをしていた時間も、まるごと入る。 */
+  Q.brk=(p.brk||0)+1;
+  Q.away=(p.away||0)+Math.max(0, Date.now()-(p.at||Date.now()));
   Q.i=Math.min(Q.log.length, items.length);
   if(Q.i>=items.length){ endSession(); return; }   // 全問終えて提出前だった
   $('#qOk').textContent='◯'+Q.ok; $('#qNg').textContent='✕'+Q.ng;
+  Q.__resumeQT0 = p.qT0 || 0;                      // 1問の残り時間を引き継ぐため
   renderQ();
+  examTotalStart();
   toast(`${Q.i} 問目まで終わっています。続きから再開します`);
 }
 function examBegin(){
@@ -6269,6 +6332,42 @@ function examBegin(){
   const items=buildExamItems(cfg);
   window.__examVoice = cfg.av || '';       // 受験中は先生の指定を使う
   startSession([], {items, exam:{cfg, seed:cfg.seed, who:{cls,name:nm,sid}}});
+  Q.brk=0; Q.away=0;
+  examTotalStart();
+  examSaveProgress();
+}
+/* ---------- 全体の制限時間 ----------
+   時計は実時間で進む。ページを閉じている間も減る。
+   だから「わからない問題でリフレッシュして調べる」をやると、自分の持ち時間が減る。 */
+let examTotTimer=null;
+function examTotalStop(){ if(examTotTimer){ clearInterval(examTotTimer); examTotTimer=null; } }
+function examTotalStart(){
+  examTotalStop();
+  const box=$('#exTotal'); if(!box) return;
+  const mins=(Q && Q.exam && +Q.exam.cfg.total) || 0;
+  if(!mins){ box.style.display='none'; return; }
+  box.style.display='flex';
+  const tick=()=>{
+    if(!Q || !Q.exam || Q.__done){ examTotalStop(); return; }
+    const left=(Q.t0||Date.now()) + mins*60000 - Date.now();
+    if(left<=0){
+      examTotalStop();
+      box.className='totbar danger'; box.textContent='⏰ 終了時刻になりました';
+      examTimeUp();
+      return;
+    }
+    const m=Math.floor(left/60000), sec=Math.floor(left%60000/1000);
+    box.className='totbar'+(left<60000?' danger':(left<180000?' warn':''));
+    box.textContent=`⏳ 残り ${m}分${String(sec).padStart(2,'0')}秒`;
+  };
+  tick(); examTotTimer=setInterval(tick,500);
+}
+function examTimeUp(){
+  if(!Q || !Q.exam || Q.__done) return;
+  stopTimer();
+  const rest=Q.items.length-Q.log.length;
+  toast(rest>0 ? `時間切れです。残り ${rest} 問は未解答として提出します` : '時間切れです');
+  endSession();
 }
 /* 受験中に上書きする設定。終わったら元に戻す。 */
 const EXAM_KEYS=['initial','mean','ja','hint','speak','rate','limit','retry','count'];
@@ -6284,6 +6383,7 @@ function examRestore(){
 function examFinish(){
   if(Q.__done) return;                       // 二重送信・二重集計を防ぐ
   Q.__done=true;
+  examTotalStop();
   examClearProgress();                       // 途中経過はもう要らない
   examRestore();                             // 学生自身の設定に戻す
   $('#quizPlay').style.display='none';
@@ -6295,6 +6395,7 @@ function examFinish(){
   const rate=total?Math.round(ok/total*100):0;
   const rec2={v:1, t:cfg.id, ti:cfg.title, c:who.cls, n:who.name, s:who.sid,
     q:total, o:ok, e:near, r:rate, sec, at:Date.now(),
+    bk:Q.brk||0, aw:Math.round((Q.away||0)/1000),        // 中断回数 / 離席の秒数
     d:Q.log.map((x,i)=>[Q.items[i]?Q.items[i].e.id:0, x.res==='ok'?1:(x.res==='near'?2:0)])};
   const code=b64u(JSON.stringify(rec2));
   
@@ -6346,7 +6447,7 @@ function examFinish(){
     $('#exCopy').onclick=()=>{ $('#exCode').select();
       try{ navigator.clipboard.writeText(code); }catch(e){ document.execCommand('copy'); } toast('コードをコピーしました'); };
   }
-  if(!hasGas) buildManual($('#exManual'));
+  if(!hasGas){ buildManual($('#exManual')); examMarkDone(cfg, who); }
 
   // --- 先生へ送信 ---
   if(hasGas){
@@ -6361,10 +6462,20 @@ function examFinish(){
         body:JSON.stringify(rec2)})
         .then(r=>r.json().catch(()=>({ok:true})))
         .then(j=>{
+          if(j && (j.ok===undefined || j.ok===true)) examMarkDone(cfg, who);
           if(j && j.ok===false && j.closed){
             btn.disabled=true; btn.textContent='送信できません';
             box.innerHTML='<div class="sendbox ng">🔒 <b>このテストは締め切られています。</b><br>'
               +'スコアは受け付けられませんでした。先生に確認してください。</div>';
+            $('#exBackup').innerHTML='';
+            return;
+          }
+          if(j && j.ok===false && j.dup){
+            examMarkDone(cfg, who);          // この端末でも受け直せないようにしておく
+            btn.disabled=true; btn.textContent='送信できません';
+            box.innerHTML='<div class="sendbox ng">🚫 <b>すでに提出されています。</b><br>'
+              +'このテストは1回だけ受けられます。2回目は受け付けられません。<br>'
+              +'心当たりがない場合は、学籍番号が正しいか確かめて、先生に相談してください。</div>';
             $('#exBackup').innerHTML='';
             return;
           }
