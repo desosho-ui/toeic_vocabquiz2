@@ -3665,12 +3665,17 @@ function audInit(){
   try{
     const base=audBase();
     if(audTried===base) return; audTried=base;
-    fetch(base+'manifest.json').then(r=>r.ok?r.json():null).then(j=>{
+    /* 一覧そのものも、古いものが残っていると作り直しに気づけない */
+    fetch(base+'manifest.json',{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(j=>{
       if(!j || !j.v){ audWeb(); return; }
       // v1（声が1種類だけ）も読めるようにしておく
       const vs = (j.v>=2 && j.voices) ? j.voices
                : [{id:'', name:j.voice||'内蔵音声', label:j.voice||'内蔵音声', w:j.w||[], s:j.s||[]}];
       AUD={ ext:j.ext||'mp3', rate:+j.rate||1,
+        /* 音声を作り直しても、ファイル名は同じままなので、
+           ブラウザが古いものを持ち続けることがある。
+           一覧の作成時刻をURLに付けて、作り直したら取り直させる。 */
+        ver:String(j.at||'').replace(/[^0-9]/g,''),
         words:new Set(j.words||[]),         // 例文に出てくる単語（並べ替え問題用）
         ja: j.ja ? { id:j.ja.id, label:j.ja.label||'', ext:j.ja.ext||j.ext||'mp3',
           mSet:new Set(j.ja.m||[]), jSet:new Set(j.ja.j||[]), nSet:new Set(j.ja.n||[]) } : null,
@@ -3757,7 +3762,8 @@ function audFind(text, id){
    タップしてから取りに行くと、電波の状況しだいで一拍おくれる。
    問題を出した時点でまとめて取っておき、タップ時は端末の中から鳴らす。 */
 function audSrc(c){
-  return audBase()+(c.v.id?c.v.id+'/':'')+c.kind+'/'+c.id+'.'+(c.v.ext||AUD.ext||'mp3');
+  const q = (AUD && AUD.ver) ? '?v='+AUD.ver : '';
+  return audBase()+(c.v.id?c.v.id+'/':'')+c.kind+'/'+c.id+'.'+(c.v.ext||AUD.ext||'mp3')+q;
 }
 /* URL を取ってくるだけでは足りない。
    再生のたびに src を差し替えると、その場で読み込み直しが走って一拍おくれる。
