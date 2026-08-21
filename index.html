@@ -131,17 +131,67 @@ td.ops{white-space:nowrap}
 @media(max-width:520px){ .sc-grid{grid-template-columns:repeat(2,1fr)} }
 .privnote{margin:-4px 0 10px;padding:8px 11px;background:var(--p4s);border:2px dashed var(--p4);
   border-radius:11px;font-weight:800}
-/* 名簿モード：見せたくない列を隠す */
-#gTbl.privacy th:nth-child(5),#gTbl.privacy td:nth-child(5),
-#gTbl.privacy th:nth-child(6),#gTbl.privacy td:nth-child(6),
-#gTbl.privacy th:nth-child(7),#gTbl.privacy td:nth-child(7),
-#gTbl.privacy th:nth-child(8),#gTbl.privacy td:nth-child(8),
-#gTbl.privacy th:nth-child(9),#gTbl.privacy td:nth-child(9),
-#gTbl.privacy th:nth-child(10),#gTbl.privacy td:nth-child(10){display:none}
-#gTbl.privacy td.tname{max-width:none}
-#gTbl.privacy td .mflag{display:none}                     /* 回数や中断の印も伏せる */
-#gTbl.privacy tbody td:nth-child(4)::after{content:' ✅ 提出ずみ';font-weight:900;color:var(--p3);font-size:12px}
-#gTbl.privacy tbody td.empty::after{content:''}
+
+/* ---- 列見出しの絞り込み（エクセルのオートフィルタのように使う）---- */
+#gTbl thead th{position:relative;cursor:pointer;user-select:none}
+#gTbl thead th:last-child{cursor:default}
+#gTbl thead th .hl{margin-right:3px}
+#gTbl thead th .fbtn{margin-left:5px;border:1.5px solid var(--edge);background:var(--panel);color:var(--ink);
+  border-radius:6px;font-size:10px;font-weight:900;line-height:1;padding:2px 4px;cursor:pointer}
+#gTbl thead th .fbtn:hover{background:var(--p1s);border-color:var(--p1);color:var(--p1)}
+#gTbl thead th.filtered{background:var(--p1s)}
+#gTbl thead th.filtered .fbtn{background:var(--p1);border-color:var(--p1);color:#fff}
+.fmenu{position:fixed;z-index:60;width:250px;max-height:min(70vh,430px);overflow:auto;
+  background:var(--panel);border:2.5px solid var(--edge);border-radius:14px;
+  box-shadow:0 10px 26px rgba(0,0,0,.22);padding:9px}
+.fmenu .fm-sort{display:flex;gap:6px;margin-bottom:8px}
+.fmenu .fm-sort button{flex:1;font-size:12px;font-weight:900;padding:6px 4px;border-radius:9px;
+  border:2px solid var(--edge);background:var(--panel);color:var(--ink);cursor:pointer}
+.fmenu .fm-sort button.on{background:var(--p1);border-color:var(--p1);color:#fff}
+.fmenu input.fm-q{width:100%;font-size:13px;padding:6px 8px;border:2px solid var(--edge);
+  border-radius:9px;margin-bottom:7px}
+.fmenu label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;
+  padding:5px 6px;border-radius:8px;cursor:pointer}
+.fmenu label:hover{background:var(--p1s)}
+.fmenu label input{width:16px;height:16px;flex:none}
+.fmenu label .n{margin-left:auto;font-size:11px;color:var(--sub);font-weight:800}
+.fmenu .fm-all{border-bottom:2px dashed var(--line);margin-bottom:4px;padding-bottom:6px}
+.fmenu .fm-foot{display:flex;gap:6px;margin-top:8px;border-top:2px dashed var(--line);padding-top:8px}
+.fmenu .fm-foot button{flex:1;font-size:12px;font-weight:900;padding:7px 4px;border-radius:9px;
+  border:2px solid var(--edge);background:var(--panel);color:var(--ink);cursor:pointer}
+.fmenu .fm-foot button.p{background:var(--p1);border-color:var(--p1);color:#fff}
+.fmenu .fm-none{font-size:12px;color:var(--sub);padding:6px}
+.filtrow{gap:6px;flex-wrap:wrap}
+.fchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;
+  background:var(--p1s);border:2px solid var(--p1);color:var(--p1);border-radius:999px;padding:3px 5px 3px 10px}
+.fchip button{border:none;background:var(--p1);color:#fff;border-radius:999px;width:17px;height:17px;
+  font-size:10px;line-height:1;cursor:pointer;font-weight:900}
+.fchip.clr{background:var(--panel);border-color:var(--edge);color:var(--sub);padding:3px 10px;cursor:pointer}
+
+/* ---- 名簿モード：教室のプロジェクターに映す全画面表示 ---- */
+.roster{position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;flex-direction:column;
+  --rsz:1}
+.roster .rs-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:14px 20px;border-bottom:3px solid var(--edge);background:var(--panel)}
+.roster .rs-ttl{font-size:26px;font-weight:900;letter-spacing:-.5px;flex:1;min-width:0}
+.roster .rs-ttl span{font-size:15px;color:var(--sub);margin-left:10px;font-weight:800}
+.roster .rs-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.roster .rs-count{font-size:18px;font-weight:900;color:var(--p1);margin-right:6px}
+.roster .rs-body{flex:1;overflow:auto;padding:18px 20px 4px}
+.roster .rs-foot{padding:10px 20px 16px;font-size:15px;font-weight:800;color:var(--sub);text-align:center}
+.rs-cls{margin-bottom:22px}
+.rs-cls h4{font-size:calc(20px*var(--rsz));font-weight:900;margin:0 0 10px;display:flex;
+  align-items:center;gap:10px}
+.rs-cls h4 b{background:var(--p1);color:#fff;border-radius:999px;padding:2px 14px}
+.rs-cls h4 span{font-size:calc(13px*var(--rsz));color:var(--sub)}
+.rs-names{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(210px*var(--rsz)),1fr));gap:10px}
+.rs-name{background:var(--panel);border:3px solid var(--p3);border-radius:14px;
+  padding:calc(10px*var(--rsz)) calc(13px*var(--rsz));box-shadow:0 4px 0 var(--edge);
+  display:flex;align-items:baseline;gap:8px}
+.rs-name .nm{font-size:calc(25px*var(--rsz));font-weight:900;letter-spacing:-.5px}
+.rs-name .sid{font-size:calc(13px*var(--rsz));color:var(--sub);font-weight:800;margin-left:auto}
+.rs-name .ck{color:var(--p3);font-size:calc(18px*var(--rsz))}
+.rs-empty{font-size:20px;font-weight:800;color:var(--sub);text-align:center;padding:40px 0}
 .mflag.dup{background:#FFE0E0;color:#B42318;border-color:#F97066}
 h2{font-size:21px;margin:0 0 4px;font-weight:900;letter-spacing:-.3px}
 h3{font-size:16px;margin:0 0 12px;font-weight:900;display:flex;align-items:center;gap:8px}
