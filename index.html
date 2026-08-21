@@ -111,6 +111,24 @@ td.tname{font-weight:800;color:var(--p1);max-width:220px;overflow:hidden;
 .mflag.lead{margin-left:0}
 .scrollhint{text-align:center;margin:8px 0 0;font-size:12px;font-weight:800;opacity:.75}
 .mflag.brk{background:#FFE9E9;border-color:#F97066;color:#B42318}
+.mflag.try{background:var(--p1s);border-color:var(--p1);color:var(--p1)}
+.mflag.ok2{background:#E7F8EE;border-color:#34C759;color:#137a3a}
+td.ops{white-space:nowrap}
+.rst.again{width:auto;padding:0 8px;font-size:11px;font-weight:900;margin-right:5px}
+.rst.again.on{background:#E7F8EE;border-color:#34C759;color:#137a3a}
+.privnote{margin:-4px 0 10px;padding:8px 11px;background:var(--p4s);border:2px dashed var(--p4);
+  border-radius:11px;font-weight:800}
+/* 名簿モード：見せたくない列を隠す */
+#gTbl.privacy th:nth-child(5),#gTbl.privacy td:nth-child(5),
+#gTbl.privacy th:nth-child(6),#gTbl.privacy td:nth-child(6),
+#gTbl.privacy th:nth-child(7),#gTbl.privacy td:nth-child(7),
+#gTbl.privacy th:nth-child(8),#gTbl.privacy td:nth-child(8),
+#gTbl.privacy th:nth-child(9),#gTbl.privacy td:nth-child(9),
+#gTbl.privacy th:nth-child(10),#gTbl.privacy td:nth-child(10){display:none}
+#gTbl.privacy td.tname{max-width:none}
+#gTbl.privacy td .mflag{display:none}                     /* 回数や中断の印も伏せる */
+#gTbl.privacy tbody td:nth-child(4)::after{content:' ✅ 提出ずみ';font-weight:900;color:var(--p3);font-size:12px}
+#gTbl.privacy tbody td.empty::after{content:''}
 .mflag.dup{background:#FFE0E0;color:#B42318;border-color:#F97066}
 h2{font-size:21px;margin:0 0 4px;font-weight:900;letter-spacing:-.3px}
 h3{font-size:16px;margin:0 0 12px;font-weight:900;display:flex;align-items:center;gap:8px}
@@ -6394,7 +6412,7 @@ function examResume(cfg){
   examTotalStart();
   toast(`${Q.i} 問目まで終わっています。続きから再開します`);
 }
-function examBegin(){
+async function examBegin(){
   const cls=$('#exClass').value.trim(), nm=$('#exName').value.trim(), sid=$('#exSid').value.trim();
   if(!cls){ toast('クラスを選んでください'); $('#exClass').focus(); return; }
   if(!nm){ toast('氏名を入力してください'); $('#exName').focus(); return; }
@@ -6406,6 +6424,25 @@ function examBegin(){
     return;
   }
   const cfg=EXAM;
+  /* 始める直前に、その学籍番号でもう提出していないかを確かめる。
+     ここで見ないと、先生が許可を取り消したのに受け始めてしまう。
+     別の端末ですでに受けている場合も、ここで止まる。 */
+  if(cfg.gas){
+    const btn=$('#exStart'); const was=btn.textContent;
+    btn.disabled=true; btn.textContent='確認しています…';
+    let done=false, err=false;
+    try{ done = await gasSubmitted(cfg.gas, cfg.id, sid); }
+    catch(e){ err=true; }
+    btn.disabled=false; btn.textContent=was;
+    if(EXAM!==cfg) return;                       // 待っている間に別の画面へ移った
+    if(done){
+      examMarkDone(cfg, {name:nm, sid});         // この端末でも「提出ずみ」に戻す
+      toast('この学籍番号はすでに提出ずみです');
+      showExamEntry(cfg);
+      return;
+    }
+    if(err) toast('確認できませんでした。そのまま始めます');
+  }
   /* 受験中は、先生が決めた内容だけを使う。
      学生が自分の端末でどう設定していても、そちらは見ない。
      元の設定は預かっておき、終わったら必ず返す。 */
