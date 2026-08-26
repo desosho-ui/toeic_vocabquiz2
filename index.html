@@ -432,14 +432,18 @@ html[data-theme="dark"] .tag.c-func{color:var(--p4)}html[data-theme="dark"] .tag
 /* ================= table ================= */
 .tblwrap{overflow:auto;max-height:72vh;border:2.5px solid var(--edge);border-radius:18px;background:var(--panel);
   box-shadow:var(--hs);overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-table{border-collapse:separate;border-spacing:0;width:100%;font-size:13.5px;min-width:760px;table-layout:fixed}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:13.5px;min-width:800px;table-layout:fixed}
 th,td{padding:10px 9px;text-align:left;box-shadow:inset 0 -2px 0 var(--line);vertical-align:top;overflow-wrap:break-word}
 th{background:var(--line);font-size:12px;font-weight:900;color:var(--sub);position:sticky;top:0;white-space:nowrap;z-index:5}
 th[data-s]{cursor:pointer}th[data-s]:hover{color:var(--p1)}
 th .ar{opacity:.4;font-size:10px}th.sorted{color:var(--p1)}th.sorted .ar{opacity:1}
 tbody tr{transition:.12s}tbody tr:hover{background:var(--p1s)}
 tbody tr:last-child td{box-shadow:none}
-td.hw{font-family:Georgia,serif;font-weight:900;font-size:15.5px;line-height:1.4}
+td.hw{font-family:Georgia,serif;font-weight:900;font-size:15.5px;line-height:1.4;
+  /* recommendation のような長い語を、途中で切って改行しない
+     （ハイフンでつながった語は、ハイフンの所でなら折り返してよい） */
+  overflow-wrap:normal;word-break:normal;hyphens:none}
+td.hw .spk,td.hw .badge-n,td.hw .badge-m,td.hw .badge-w{white-space:nowrap}
 .ex-en{font-family:Georgia,serif;line-height:1.55;font-size:13.5px}
 .ex-ja{color:var(--sub);font-size:12.5px;line-height:1.5}
 td.c-ex{hyphens:auto}
@@ -456,6 +460,9 @@ td.c-star{display:flex;flex-direction:column;align-items:center;gap:7px}
 .toast.act{pointer-events:auto;cursor:pointer}
 .toast.act b{text-decoration:underline;margin-left:8px;white-space:nowrap}
 .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12.5px;font-weight:700}
+/* 番号の列。万一はみ出しても、となりの列に食い込ませない
+   （右づめなので、はみ出すと左へあふれて区切り線がずれて見える） */
+#listTbl td.c-idx{overflow:hidden;text-overflow:clip}
 .spk{background:none;border:0;cursor:pointer;opacity:.4;font-size:13px;padding:0 3px;transition:.15s}
 .spk:hover{opacity:1;transform:scale(1.25)}
 .due-now{color:var(--p2);font-weight:900}
@@ -589,7 +596,8 @@ body.student .logo{flex:1}
   #listTbl td.c-star .star{font-size:22px}
   #listTbl td.c-star .rst{font-size:19px}
   #listTbl td.c-idx{color:var(--sub);font-size:11.5px}
-  #listTbl td.c-hw{font-size:19px;margin-bottom:2px}
+  /* 見出しだけは、途中で切って改行しない（recommendatio / n を防ぐ） */
+  #listTbl td.c-hw{font-size:19px;margin-bottom:2px;overflow-wrap:normal;word-break:normal;hyphens:none}
   #listTbl td.c-ex{margin-top:8px;padding-top:8px;border-top:2px dashed var(--line)}
   #listTbl td.c-rec,#listTbl td.c-due{display:inline-block;margin:7px 14px 0 0;font-size:12px;vertical-align:top}
   #listTbl td.c-empty{text-align:center;padding:30px 0;color:var(--sub)}
@@ -885,8 +893,10 @@ body.student .logo{flex:1}
     </div>
     <div class="tblwrap">
       <table id="listTbl">
-        <colgroup><col style="width:32px"><col style="width:60px"><col style="width:152px"><col style="width:58px">
-          <col style="width:172px"><col><col style="width:104px"><col style="width:92px"></colgroup>
+        <!-- 番号は4けた（#2601）まで入る幅にしてある。せまいと右づめの数字が
+             左へはみ出して、区切り線がずれて見える -->
+        <colgroup><col style="width:32px"><col style="width:78px"><col style="width:212px"><col style="width:58px">
+          <col style="width:160px"><col><col style="width:104px"><col style="width:92px"></colgroup>
         <thead><tr>
           <th></th>
           <th data-s="idx" title="各カテゴリの中の通し番号">#</th>
