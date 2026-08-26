@@ -5162,13 +5162,127 @@ const MEANS_BY_SF = (()=>{ const m=new Map();
 function anyMeanClose(surface, target){
   const ms = MEANS_BY_SF.get(String(surface).toLowerCase());
   if(!ms) return false;
-  for(const m of ms) if(meanSim(m,target)>=0.5) return true;
+  for(const m of ms) if(meanClash(m,target)) return true;
+  return false;
+}
+/* 同じ綴りで別の語義が登録されているときは、その例文もぜんぶ見る。
+   学習者はどの語義で読むか選べないので、ひとつでも当てはまれば避ける。 */
+const EX_BY_SF = (()=>{ const m=new Map();
+  DATA.forEach(e=>{ [e.sf,e.head].forEach(k=>{ if(!k) return; const kk=String(k).toLowerCase();
+    if(!m.has(kk)) m.set(kk,[]); m.get(kk).push(e.ex); }); });
+  return m; })();
+function anyTopicClose(surface, ex){
+  const xs = EX_BY_SF.get(String(surface).toLowerCase());
+  if(!xs) return false;
+  for(const s of xs) if(sameTopic(s,ex)) return true;
   return false;
 }
 function meanSim(a,b){
   const A=bigrams(a),B=bigrams(b); if(!A.size||!B.size) return 0;
   let i=0; A.forEach(x=>{ if(B.has(x)) i++; });
   return 2*i/(A.size+B.size);
+}
+/* ---- 「どちらも入ってしまう」語のグループ ----
+   意味も例文の話題もちがうのに、その文には両方すんなり入ってしまう組み合わせがある。
+     Employees are ___ to follow the safety rules.
+       → obligated でも required でも motivated でも通ってしまう
+   これは計算では見分けられないので、仲間どうしを手で書き並べておき、
+   同じグループの語は同じ問題に並べない。
+   気づいたものが増えたら、この表に1行足すだけでよい。
+   活用（-s / -ed / -ing）はこちらでそろえるので、原形で書けばよい。 */
+const NGGROUP = [
+  ['obligate','require','expect','encourage','permit','allow','motivate','entitle','schedule',
+   'advise','urge','invite','ask','suppose','eligible','able','willing','ready','reluctant','instruct'],
+  ['daily','weekly','monthly','quarterly','annual','annually','yearly','hourly','biweekly','nightly'],
+  ['install','replace','repair','inspect','remove','upgrade','relocate','assemble','service'],
+  ['send','ship','deliver','dispatch','forward','mail','transfer','distribute'],
+  ['increase','rise','grow','expand','improve','boost','climb'],
+  ['decrease','decline','drop','fall','reduce','shrink','lower'],
+  ['meeting','conference','seminar','workshop','session','convention','symposium','briefing'],
+  ['employee','staff','worker','personnel','workforce','colleague','coworker','associate'],
+  ['customer','client','guest','visitor','patron','consumer','attendee'],
+  ['refund','discount','rebate','reimbursement','credit','voucher'],
+  ['begin','start','launch','commence','initiate','open','introduce'],
+  ['finish','complete','conclude','end','close','finalize','wrap'],
+  ['submit','file','present','turn','hand','return'],
+  ['confirm','verify','check','review','examine','inspect','evaluate','assess'],
+  ['postpone','delay','reschedule','cancel','suspend'],
+  ['purchase','buy','acquire','obtain','order'],
+  ['cost','expense','fee','charge','price','rate','fare'],
+  ['location','site','venue','facility','branch','office','headquarters','premises'],
+  ['responsible','accountable','liable'],
+  ['mandatory','required','compulsory','obligatory','necessary','essential'],
+  ['immediately','promptly','shortly','soon','instantly'],
+  ['probably','likely','presumably','apparently','seemingly','possibly'],
+  ['almost','nearly','approximately','roughly','around'],
+  ['often','frequently','regularly','usually','normally','generally','typically'],
+  ['brochure','pamphlet','leaflet','flyer','catalog','booklet'],
+  ['repair','fix','mend','restore'],
+  ['notify','inform','announce','advise','alert','remind'],
+  ['attend','join','participate'],
+  ['choose','select','pick','elect'],
+  ['reserve','book','arrange'],
+];
+/* 活用のちがいを吸収して照らし合わせる */
+function ngKeys(w){
+  const a=String(w||'').toLowerCase().replace(/[^a-z]/g,'');
+  const b=a.replace(/(ies|ied|ing|ed|es|s)$/,'');
+  return [...new Set([a,b,b+'e'])].filter(Boolean);
+}
+const NGIDX = (()=>{ const m=new Map();
+  NGGROUP.forEach((g,i)=>g.forEach(x=>ngKeys(x).forEach(k=>{
+    if(!m.has(k)) m.set(k,new Set()); m.get(k).add(i); })));
+  return m; })();
+function ngPair(a,b){
+  const A=new Set(), B=new Set();
+  ngKeys(a).forEach(k=>(NGIDX.get(k)||[]).forEach(i=>A.add(i)));
+  ngKeys(b).forEach(k=>(NGIDX.get(k)||[]).forEach(i=>B.add(i)));
+  for(const i of A) if(B.has(i)) return true;
+  return false;
+}
+/* 見出し語でも例文中の形でも、どちらかが同じ仲間ならダミーにしない */
+function ngClash(x, e){
+  return ngPair(x.sf,e.sf)||ngPair(x.head,e.head)||ngPair(x.sf,e.head)||ngPair(x.head,e.sf);
+}
+/* 和訳の「芯」だけを取り出す（～・かっこ・語尾の する／な などを落とす）。
+   「申し込む」と「申し込みをする」のように、書き方は違うが同じ意味のものを
+   同じ形に寄せて、ダミーに使わないようにするため。 */
+function jaCore(s){
+  return String(s||'').replace(/[（(][^）)]*[）)]/g,'')
+    .replace(/[～〜・、。／\/]/g,'')
+    .replace(/(させる|される|している|した|する|な|の|こと|もの|だ|です)$/,'');
+}
+/* この2つの意味は近すぎて、両方とも正解になりうるか */
+function meanClash(a,b){
+  const A=jaCore(a), B=jaCore(b);
+  if(!A||!B) return false;
+  if(A===B) return true;
+  if(A.length>=2 && B.length>=2 && (A.includes(B)||B.includes(A))) return true;
+  return meanSim(a,b)>=0.34;
+}
+/* 例文どうしが同じ話題か。
+   同じ話題の語は、入れ替えても文が成り立ってしまいやすい
+   （例：「Employees are obligated to …」に motivated を入れても通る）。
+   内容語を2つ以上共有していたら、ダミーには使わない。 */
+const TOPSTOP=new Set(['the','a','an','of','in','on','at','to','for','by','with','from','and','or','as','is','are',
+  'was','were','be','been','being','will','would','can','could','should','may','might','must','have','has','had',
+  'do','does','did','not','this','that','these','those','it','its','he','she','they','we','you','i','his','her',
+  'their','our','your','my','all','any','some','no','more','most','than','then','there','here','if','so','but',
+  'new','next','last','one','two','also','after','before','when','while','who','which','what','how','please',
+  'you’ll','we’ll','it’s']);
+const _tw=new Map();
+function topicWords(s){
+  if(_tw.has(s)) return _tw.get(s);
+  const r=new Set(String(s||'').toLowerCase().replace(/[^a-z'’\s-]/g,' ').split(/\s+/)
+    .map(w=>w.replace(/'s$|’s$/,''))
+    .filter(w=>w.length>=3 && !TOPSTOP.has(w))
+    .map(w=>w.replace(/(ies|es|s|ing|ed)$/,'')).filter(w=>w.length>=3));
+  _tw.set(s,r); return r;
+}
+function sameTopic(a,b){
+  const A=topicWords(a), B=topicWords(b); if(A.size<2||B.size<2) return false;
+  let n=0; A.forEach(x=>{ if(B.has(x)) n++; });
+  return n>=2;
 }
 const CWSTOP=new Set(['a','an','the','of','in','on','at','to','for','by','with','from','and','or','out','up','as',
   'is','are','be','all','any','no','not','other','such','one','two','it','you','we','they','that','this','your','my']);
@@ -5191,8 +5305,72 @@ function bankFor(pc,pf){
   const key = pc==='VERB' ? 'VERB_'+(pf||'base') : pc;
   return (PBANK[key] || PBANK[pc] || []).slice();   // クラス外のダミーは混ぜない
 }
+/* ---------- Part 5：つなぎ語の選択肢 ----------
+   本番の Part 5 では、although と despite のように
+   「意味は同じなのに、後ろに取れる形がちがう」語を並べる。
+   意味だけでは選べず、文の構造を見ないと決まらない――出題者の狙いはそこにある。
+
+   ここも同じ作り方にする。選択肢はすべて品詞（働き）がちがうので、
+   空欄に入る形はひとつしかなく、正解が2つになることが起きない。
+   以前は「同じ品詞の中から」選んでいたため、
+   because の問題に when が混ざる（どちらも入る）ことがあった。 */
+const FCLASS = ['接続詞','前置詞','接続副詞','等位接続詞','不定詞句'];
+/* 等位接続詞（but, and, so…）は、前も後ろも節なので、
+   従属接続詞（although）の場所にも、接続副詞（however）の場所にも
+   入ってしまうことがある。たがいにダミーには使わない。
+     × The event was held as planned ___ it rained heavily.
+       … although でも but でも文として通ってしまう          */
+const FCLASH = {'等位接続詞':['接続副詞','接続詞'],'接続副詞':['等位接続詞'],'接続詞':['等位接続詞']};
+/* 表には出していないが、副詞としても使える語。
+   Notwithstanding, the event was held. のように単独でも通ってしまうので、
+   接続副詞の問題のダミーには使わない。 */
+const FALSO = {'notwithstanding':['接続副詞'],'yet':['接続副詞']};
+function fclasses(p,sf){
+  const a=posTokens(p).filter(x=>FCLASS.includes(x));
+  const ex=FALSO[String(sf||'').toLowerCase()];
+  return ex ? [...new Set(a.concat(ex))] : a;
+}
+/* 同じ綴りで2つ登録されている語（since は「～なので」の接続詞と
+   「～以来」の接続詞・前置詞）は、働きをぜんぶ足して考える。
+   学習者はどちらの意味で読むか選べるので、片方でも入るなら避ける。 */
+const FCLS_BY_SF = (()=>{ const m=new Map();
+  DATA.forEach(e=>{ if(e.cat!=='func') return; const k=String(e.sf).toLowerCase();
+    if(!m.has(k)) m.set(k,new Set());
+    fclasses(e.pos,e.sf).forEach(c=>m.get(k).add(c)); });
+  return m; })();
+const allFclasses = sf => [...(FCLS_BY_SF.get(String(sf).toLowerCase()) || [])];
+function funcOptions(e){
+  const ans=ansOf(e).trim(), lo=s=>String(s).toLowerCase(), la=lo(ans);
+  const mine=fclasses(e.pos,e.sf);
+  if(!mine.length) return null;
+  const banned=new Set(mine);
+  mine.forEach(c=>(FCLASH[c]||[]).forEach(x=>banned.add(x)));
+  // 空欄に入りうる働きを持つ語は、そもそも候補にしない（＝正解が2つにならない）
+  const pool = DATA.filter(x=> x.cat==='func' && x.id!==e.id && x.sf && lo(x.sf)!==la
+      && allFclasses(x.sf).length && allFclasses(x.sf).every(c=>!banned.has(c)));
+  if(pool.length<3) return null;
+  const out=[ans], used=new Set([la]), cls=new Set();
+  const take=(list,newClassOnly,cap)=>{
+    for(const x of shuffle(list)){
+      if(out.length>=(cap||4)) return;
+      const c=fclasses(x.pos,x.sf)[0];
+      if(newClassOnly && cls.has(c)) continue;
+      if(used.has(lo(x.sf))) continue;
+      used.add(lo(x.sf)); cls.add(c); out.push(matchCase(x.sf,ans));
+    }
+  };
+  const sameG = pool.filter(x=>x.grp===e.grp), otherG = pool.filter(x=>x.grp!==e.grp);
+  /* 出題ごとに形を変える。
+       同義そろえ … 4つとも同じ意味。文の構造だけで決める（although / despite / however）
+       混ぜ      … 2つは同義、1つは別の意味。意味と構造の両方を見る            */
+  if(RNG()<0.5) take(sameG,true);            // まず同じ意味・働きちがいで
+  else take(sameG,true,3);                   // 同義は2つまでにして、残りは別の意味から
+  take(otherG,false); take(sameG,false);     // 残りは別の意味グループから
+  return out.length>=4 ? shuffle(out) : null;
+}
 function enOptions(e){
   const ans=ansOf(e).trim(), lo=s=>String(s).toLowerCase(), la=lo(ans);
+  if(e.cat==='func'){ const f=funcOptions(e); if(f) return f; }
   const multi=/\s/.test(ans);
   const seen=new Set([la]), out=[ans];
   const push=v=>{ v=String(v).trim(); const k=lo(v);
@@ -5204,6 +5382,8 @@ function enOptions(e){
     const same = x => x.id!==e.id && x.sf && /\s/.test(x.sf) && lo(x.sf)!==la
         && !anyMeanClose(x.sf, e.mean)           // 意味が近すぎるものは正解になりうる（別語義での重複も見る）
         && !sharesContent(x.sf,ans)              // 共通の内容語（○○ department 等）は両方成立しうる
+        && !anyTopicClose(x.sf, e.ex)            // 同じ話題の表現は入れ替えても通ってしまう
+        && !ngClash(x, e)                        // 手で並べた「どちらも入る」仲間も外す
         && (e.cat!=='func' ? x.cat!=='func' : posOverlap(x.pos,e.pos));
     const bank = bankFor(pc,pf).filter(t=>lo(t)!==la && !sharesContent(t,ans));
     let corpus = DATA.filter(x=>same(x) && x.pc===pc && (pc!=='VERB' || !pf || (x.pf||'base')===pf));
@@ -5219,7 +5399,7 @@ function enOptions(e){
     bank.forEach(push);
     if(out.length<4) bankFor(pc,pf).forEach(push);
     if(out.length<4) DATA.filter(x=>x.id!==e.id&&x.sf&&/\s/.test(x.sf)&&lo(x.sf)!==la
-        &&!anyMeanClose(x.sf,e.mean)).forEach(x=>push(x.sf));
+        &&!anyMeanClose(x.sf,e.mean)&&!anyTopicClose(x.sf,e.ex)).forEach(x=>push(x.sf));
     if(out.length<4) DATA.filter(x=>x.id!==e.id&&x.sf&&/\s/.test(x.sf)&&lo(x.sf)!==la).forEach(x=>push(x.sf));
     if(out.length<4) PBANK.NOUN.forEach(push);                       // 最後の保険：必ず4つそろえる
     return shuffle(out);
@@ -5232,7 +5412,9 @@ function enOptions(e){
   const aForm = wordForm(ans);
   const base = DATA.filter(x=> x.id!==e.id && x.sf && lo(x.sf)!==la && !/\s/.test(x.sf)
       && lo(x.head)!==lo(e.head)                       // 同じ見出し語の別語義は除外
-      && !anyMeanClose(x.sf, e.mean));                 // 意味が近すぎるものは除外（別語義での重複も見る）
+      && !anyMeanClose(x.sf, e.mean)                   // 意味が近すぎるものは除外（別語義での重複も見る）
+      && !anyTopicClose(x.sf, e.ex)                    // 同じ話題の語は入れ替えても通ってしまう
+      && !ngClash(x, e));                                // 手で並べた「どちらも入る」仲間も外す
   let cands;
   if(e.cat==='func'){
     // 機能語は「同じ働きの語」からのみ（前置詞には前置詞、接続詞には接続詞）
@@ -5264,7 +5446,7 @@ function enOptions(e){
   pool.forEach(o=>push(o.x.sf));
   cands.forEach(o=>push(o.x.sf));
   if(out.length<4) DATA.filter(x=>x.id!==e.id&&x.sf&&!/\s/.test(x.sf)&&lo(x.sf)!==la
-      &&!anyMeanClose(x.sf,e.mean)).forEach(x=>push(x.sf));
+      &&!anyMeanClose(x.sf,e.mean)&&!anyTopicClose(x.sf,e.ex)).forEach(x=>push(x.sf));
   if(out.length<4) DATA.filter(x=>x.id!==e.id&&x.sf&&!/\s/.test(x.sf)&&lo(x.sf)!==la).forEach(x=>push(x.sf));
   return shuffle(out);
 }
