@@ -432,7 +432,7 @@ html[data-theme="dark"] .tag.c-func{color:var(--p4)}html[data-theme="dark"] .tag
 /* ================= table ================= */
 .tblwrap{overflow:auto;max-height:72vh;border:2.5px solid var(--edge);border-radius:18px;background:var(--panel);
   box-shadow:var(--hs);overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-table{border-collapse:separate;border-spacing:0;width:100%;font-size:13.5px;min-width:800px;table-layout:fixed}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:13.5px;min-width:880px;table-layout:fixed}
 th,td{padding:10px 9px;text-align:left;box-shadow:inset 0 -2px 0 var(--line);vertical-align:top;overflow-wrap:break-word}
 th{background:var(--line);font-size:12px;font-weight:900;color:var(--sub);position:sticky;top:0;white-space:nowrap;z-index:5}
 th[data-s]{cursor:pointer}th[data-s]:hover{color:var(--p1)}
@@ -456,7 +456,10 @@ td.c-rec .sub,td.c-due .sub{color:var(--sub);font-weight:600;font-size:11.5px}
 .rst{cursor:pointer;font-size:14px;opacity:.28;background:none;border:0;padding:0;transition:.16s;line-height:1;color:var(--sub)}
 .rst:hover{opacity:1;color:var(--p2);transform:rotate(-120deg) scale(1.15)}
 .rst[disabled]{opacity:.1;cursor:default;transform:none}
-td.c-star{display:flex;flex-direction:column;align-items:center;gap:7px}
+/* ★と↺は中の箱で縦に並べる。
+   td じたいを display:flex にすると、そのマスだけ行の高さに伸びなくなり、
+   下線がとちゅうで切れて段違いに見える（表の行の区切り線がずれる） */
+td.c-star .starcol{display:flex;flex-direction:column;align-items:center;gap:7px}
 .toast.act{pointer-events:auto;cursor:pointer}
 .toast.act b{text-decoration:underline;margin-left:8px;white-space:nowrap}
 .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12.5px;font-weight:700}
@@ -592,7 +595,8 @@ body.student .logo{flex:1}
     position:relative;box-shadow:0 4px 0 var(--edge)}
   #listTbl td{box-shadow:none;padding:2px 0;overflow-wrap:anywhere}
   #listTbl td[data-l]:not(:empty)::before{content:attr(data-l) "：";color:var(--sub);font-size:11.5px;font-weight:900;margin-right:5px}
-  #listTbl td.c-star{position:absolute;top:10px;right:11px;padding:0;flex-direction:row;gap:14px}
+  #listTbl td.c-star{position:absolute;top:10px;right:11px;padding:0}
+  #listTbl td.c-star .starcol{flex-direction:row;gap:14px}
   #listTbl td.c-star .star{font-size:22px}
   #listTbl td.c-star .rst{font-size:19px}
   #listTbl td.c-idx{color:var(--sub);font-size:11.5px}
@@ -895,7 +899,7 @@ body.student .logo{flex:1}
       <table id="listTbl">
         <!-- 番号は4けた（#2601）まで入る幅にしてある。せまいと右づめの数字が
              左へはみ出して、区切り線がずれて見える -->
-        <colgroup><col style="width:32px"><col style="width:78px"><col style="width:212px"><col style="width:58px">
+        <colgroup><col style="width:44px"><col style="width:78px"><col style="width:212px"><col style="width:58px">
           <col style="width:160px"><col><col style="width:104px"><col style="width:92px"></colgroup>
         <thead><tr>
           <th></th>
@@ -5670,8 +5674,8 @@ function renderList(){
       ? `<div>${agoText(r.l)}</div><div class="sub">→ ${dueText(r)}</div>`
       : '<span class="sub">—</span>';
     return `<tr data-id="${e.id}">
-      <td class="c-star"><button class="star ${r&&r.star?'on':''}" data-star="${e.id}" title="重点マーク">★</button>
-        <button class="rst" data-rst="${e.id}" title="この語の学習記録を消す" ${st?'':'disabled'}>↺</button></td>
+      <td class="c-star"><div class="starcol"><button class="star ${r&&r.star?'on':''}" data-star="${e.id}" title="重点マーク">★</button>
+        <button class="rst" data-rst="${e.id}" title="この語の学習記録を消す" ${st?'':'disabled'}>↺</button></div></td>
       <td class="num muted c-idx" title="${CATS[e.cat].name} の ${e.n} 番目">${CATS[e.cat].icon}${e.n}</td>
       <td class="hw c-hw">${esc(e.head)} <button class="spk" data-spk="${e.id}" title="発音">🔊</button> ${badge}</td>
       <td class="muted c-pos" data-l="品詞">${esc(e.pos||'')}</td>
