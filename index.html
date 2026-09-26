@@ -5721,7 +5721,14 @@ function next(){
   if(isPhone()) scrollToEl($('#quizPlay'),'start');
 }
 $('#quitBtn').onclick=()=>{ stopTimer();
-  if(confirm('セッションを中断しますか？（ここまでの記録は保存されます）')) endSession();
+  /* テスト中の✕は「中断」でなく「提出」。
+     残りの問題は不正解になるので、そう書いてから訍く。 */
+  const rest = Q.exam ? Math.max(0, Q.items.length - Q.log.length) : 0;
+  const msg = Q.exam
+    ? (rest ? `ここで提出しますか？　残りの${rest}問は不正解になります。`
+            : 'ここで提出しますか？')
+    : 'セッションを中断しますか？（ここまでの記録は保存されます）';
+  if(confirm(msg)) endSession();
   else if(!Q.answered) startTimer(); };
 
 function endSession(){
@@ -6822,14 +6829,21 @@ function examFinish(){
   examClearProgress();                       // 途中経過はもう要らない
   examRestore();                             // 学生自身の設定に戻す
   const ex=Q.exam, cfg=ex.cfg, who=ex.who;
-  const total=Q.log.length, ok=Q.log.filter(x=>x.res==='ok').length;
+  /* 分母は「出題数」。途中でやめても、時間切れでも変わらない。
+     解いた数を分母にしていたころは、6問で切り上げて3問正解すれで50%になり、
+     20問やった学生と同じ数字で並んでしまった。未解答は不正解として数える。 */
+  const total=Q.items.length;
+  const un=Math.max(0, total-Q.log.length);
+  const ok=Q.log.filter(x=>x.res==='ok').length;
   const near=Q.log.filter(x=>x.res==='near').length;
   const sec=Math.round((Date.now()-Q.t0)/1000);
   const rate=total?Math.round(ok/total*100):0;
   const rec2={v:1, t:cfg.id, ti:cfg.title, c:who.cls, n:who.name, s:who.sid,
-    q:total, o:ok, e:near, r:rate, sec, at:Date.now(),
+    q:total, o:ok, e:near, u:un, r:rate, sec, at:Date.now(),
     bk:Q.brk||0, aw:Math.round((Q.away||0)/1000),        // 中断回数 / 離席の秒数
-    d:Q.log.map((x,i)=>[Q.items[i]?Q.items[i].e.id:0, x.res==='ok'?1:(x.res==='near'?2:0)])};
+    // 語ごとの正誤。未解答ぶんも不正解（0）として残す
+    d:Q.items.map((it,i)=>{ const x=Q.log[i];
+      return [(it&&it.e)?it.e.id:0, !x?0:(x.res==='ok'?1:(x.res==='near'?2:0))]; })};
   /* 解き終わった結果を残しておく。
      「おつかれさまでした」の画面でリフレッシュされても、
      テストが最初からになるのではなく、この結果画面に戻ってくる。 */
@@ -6847,7 +6861,7 @@ function examShowDone(cfg, who, rec2){
   EXAM=cfg;
   $('#quizPlay').style.display='none';
   $('#quizEmpty').style.display='none';
-  const total=rec2.q||0, ok=rec2.o||0, sec=rec2.sec||0, rate=rec2.r||0;
+  const total=rec2.q||0, ok=rec2.o||0, sec=rec2.sec||0, rate=rec2.r||0, un=rec2.u||0;
   const code=b64u(JSON.stringify(rec2));
   $$('.view').forEach(s=>s.classList.remove('on'));
   $('#v-exam').classList.add('on');
@@ -6860,6 +6874,7 @@ function examShowDone(cfg, who, rec2){
        <div class="stat"><div class="v" style="color:var(--p1)">${rate}%</div><div class="l">正答率</div></div>
        <div class="stat"><div class="v">${ok}<span style="font-size:15px">/${total}</span></div><div class="l">正解数</div></div>
        <div class="stat"><div class="v">${Math.floor(sec/60)}<span style="font-size:14px">分</span>${sec%60}<span style="font-size:14px">秒</span></div><div class="l">所要時間</div></div>
+       ${un?`<div class="stat"><div class="v" style="color:var(--p2)">${un}</div><div class="l">未解答</div></div>`:''}
      </div>
      <div class="condtarget"><b>${esc(who.cls)}</b>　${esc(who.name)}（${esc(who.sid)}）</div>
      <hr class="sep">
